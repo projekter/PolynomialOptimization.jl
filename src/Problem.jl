@@ -389,7 +389,8 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         MultivariatePolynomials.variables.(nonneg)..., MultivariatePolynomials.variables.(psd)...)
     complex = !all(isreal, variables)
     complex && filter!(!isconj, variables) # we only consider the "true" variables, not conjugates
-    complex && @assert(!(tighter ||
+    oscar = !(P <: AbstractPolynomialLike)
+    complex && @assert(!(oscar || tighter ||
                          any(isconj, variables) || any(isrealpart, variables) || any(isimagpart, variables)))
     if equality_method isa EqualityMethod
         equality_method = fill(equality_method, length(zero))
@@ -423,6 +424,7 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
             if equality_method[i] == emCalculateGröbner
                 @assert(all(isreal, effective_variables(zero[i])))
             elseif equality_method[i] == emAssumeGröbner
+                @assert(!oscar)
                 @assert(all(isreal, effective_variables(zero[i])))
             end
         end
@@ -475,10 +477,15 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         if !have_calc
             # everything is known
             @inbounds gröbner_basis = zero[zero_gröbner]
-        else
+        elseif !oscar
             # mix known with unknown parts. Everything must be part of the calculation, even the known ones.
             @verbose_info("Starting Gröbner basis calculation (SemialgebraicSets)")
             @inbounds gröbner_basis = SemialgebraicSets.gröbner_basis(zero[zero_gröbner])
+            @verbose_info("Gröbner basis calculation completed")
+        else
+            @verbose_info("Starting Gröbner basis calculation (Oscar)")
+            @inbounds gröbner_basis = Oscar.ideal(zero[zero_gröbner]) # as SemialgebraicSets is the standard, the ideal is what we call gröbner_basis
+            gb = Oscar.groebner_basis(gröbner_basis) # should really be called groebner_basis!, this is just a precomputation
             @verbose_info("Gröbner basis calculation completed")
         end
         if isempty(gröbner_basis)
@@ -582,10 +589,15 @@ function poly_problem(objective::P, degree::Int, zero::AbstractVector{P}, nonneg
         # in our simple case, the ideal can only contain real-valued polynomial variables; hence, it does not matter whether we
         # take the original monomial or its conjugate to check ideal membership
         if gröbner_basis isa EmptyGröbnerBasis
-            basis = monomials(sort(variables, rev=true), 0:degree)
-        else
+            basis = monomials(oscar ? Oscar.parent(objective) : sort(variables, rev=true), 0:degree)
+        elseif !oscar
             leading_terms_ideal = leading_monomial.(gröbner_basis)
             basis = monomials(sort(variables, rev=true), 0:degree, b -> !divides(leading_terms_ideal, b))
+        else
+            # We could construct the leading ideal and do an ideal membership check, but this appears to be much slower than
+            # simple division checks.
+            leading_terms_ideal = leading_monomial.(gb)
+            basis = monomials(Oscar.parent(objective), 0:degree, b -> !divides(leading_terms_ideal, b))
         end
     else
         basis = monomial_vector(convert.(M, custom_basis))

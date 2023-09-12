@@ -5,6 +5,7 @@ using MultivariatePolynomials
 using SparseArrays
 using LinearAlgebra
 using Printf
+import Requires
 import SemialgebraicSets
 import Graphs
 import Mosek
@@ -48,5 +49,10 @@ include("./sparsity/SparsityTerm.jl")
 include("./sparsity/SparsityTermBlock.jl")
 include("./sparsity/SparsityTermCliques.jl")
 include("./sparsity/SparsityCorrelativeTerm.jl")
+
+
+function __init__()
+    Requires.@require Oscar="f1435218-dba5-11e9-1e4d-f1a5fab5fc13" include("OscarExtension.jl")
+end
 
 end

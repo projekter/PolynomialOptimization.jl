@@ -10,6 +10,11 @@ with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
 modelling framework, it introduces a significant overhead that is omitted in this way.
 
+## About this branch
+This branch contains some old work on Oscar support. Oscar is an interface to various algebra systems and the main purpose for
+its integration was slow Gröbner basis calculations. However, by now also MultivariatePolynomials supports different monomial
+orders, and an often much faster non-Gröbner-based method for handling equality constraints was included. Therefore, Oscar
+support has been dropped. This branch is not maintained and may very well not even compile.
 
 ## Compatibility notice
 Currently, the required complex-valued functionality depends on a not-yet-merged request in

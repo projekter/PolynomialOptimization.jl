@@ -100,27 +100,53 @@ function poly_solutions(state::SparseAnalysisState, ϵ::R=1e-6, δ::R=1e-3; verb
     end
     @verbose_info("Starting solution extraction per clique")
     extraction_time = @elapsed begin
-        for variables in cliques
-            @verbose_info("Investigating clique ", variables)
-            a1 = problem.basis
-            a2 = filter(mon -> degree(mon) < problem.degree, problem.basis)
-            if problem.complex
-                # this is the transpose of what we'd get with moment_matrix, but this is not important. Since the monomials
-                # in the matrix will be multiplied by variables (which are the un-conjugated ones), we must make sure that
-                # the un-conjugated ones are of the smaller degree.
-                a1 = conj.(a1)
+        if polynomial_type(problem) <: AbstractPolynomial
+            for variables in cliques
+                @verbose_info("Investigating clique ", variables)
+                a1 = problem.basis
+                a2 = filter(mon -> degree(mon) < problem.degree, problem.basis)
+                if problem.complex
+                    # this is the transpose of what we'd get with moment_matrix, but this is not important. Since the monomials
+                    # in the matrix will be multiplied by variables (which are the un-conjugated ones), we must make sure that
+                    # the un-conjugated ones are of the smaller degree.
+                    a1 = conj.(a1)
+                end
+                try
+                    result = poly_solutions_scaled(moments_scaled, a1, a2, variables, ϵ, missing_func)
+                    λ > ϵ && (result ./= λ)
+                    unsafe_push!(solutions_cl, result)
+                    @verbose_info("Potential solutions:\n", result)
+                catch e
+                    if e isa MonomialMissing
+                        unsafe_push!(solutions_cl, missing)
+                        @verbose_info("Not all monomials were present to allow for a solution extraction in this clique")
+                    else
+                        rethrow()
+                    end
+                end
             end
-            try
-                result = poly_solutions_scaled(moments_scaled, a1, a2, variables, ϵ, missing_func)
-                λ > ϵ && (result ./= λ)
-                unsafe_push!(solutions_cl, result)
-                @verbose_info("Potential solutions:\n", result)
-            catch e
-                if e isa MonomialMissing
-                    unsafe_push!(solutions_cl, missing)
-                    @verbose_info("Not all monomials were present to allow for a solution extraction in this clique")
-                else
-                    rethrow()
+        else
+            for variables in cliques
+                @verbose_info("Investigating clique ", variables)
+                # TODO improve this somehow (don't generate instead of filter out), best would be to form a partial ring, but
+                # AbstractAlgebra does not provide this functionality.
+                ring = Oscar.parent(problem.objective)
+                disabled_indices = .!(Oscar.gens(ring) .∈ (variables,))
+                filter = (mon) -> all(@view(Oscar.exponent_vector(mon, 1)[disabled_indices]) .== 0)
+                a1 = sort(monomials(ring, 0:ceil(Int, (deg - 1) / 2), filter), by=degree)
+                a2 = sort(monomials(ring, 0:floor(Int, (deg - 1) / 2)), by=degree)
+                try
+                    result = poly_solutions_scaled(moments_scaled, a1, a2, variables, ϵ, missing_func)
+                    λ > ϵ && (result ./= λ)
+                    unsafe_push!(solutions_cl, result)
+                    @verbose_info("Potential solutions:\n", result)
+                catch e
+                    if e isa MonomialMissing
+                        unsafe_push!(solutions_cl, missing)
+                        @verbose_info("Not all monomials were present to allow for a solution extraction in this clique")
+                    else
+                        rethrow()
+                    end
                 end
             end
         end
