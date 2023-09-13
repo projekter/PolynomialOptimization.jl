@@ -10,6 +10,10 @@ with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
 and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
 modelling framework, it introduces a significant overhead that is omitted in this way.
 
+## About this branch
+This branch is stale. It contains a lot of experiments around the implementation of the
+[STRIDE](https://doi.org/10.1007/s10107-022-01912-6) solver and the choice of its local subsolvers (Optim, Manopt) as well as
+the BFGS algorithm. The code is in an archived state and not loaded.
 
 ## Compatibility notice
 Currently, the required complex-valued functionality depends on a not-yet-merged request in
