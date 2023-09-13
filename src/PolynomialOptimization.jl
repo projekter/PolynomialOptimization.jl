@@ -10,6 +10,7 @@ import Graphs
 import Mosek
 import COSMO
 import Hypatia
+import ConicBundle
 import Combinatorics
 import DynamicPolynomials
 import MutableArithmetics
@@ -42,6 +43,7 @@ isdefined(Mosek, :appendafes) && include("./solvers/MosekMoment.jl")
 include("./solvers/MosekSOS.jl")
 include("./solvers/COSMOMoment.jl")
 include("./solvers/HypatiaMoment.jl")
+include("./solvers/ConicBundleSOS.jl")
 include("./sparsity/SparsityNone.jl")
 include("./sparsity/SparsityCorrelative.jl")
 include("./sparsity/SparsityTerm.jl")
