@@ -11,20 +11,12 @@ and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. De
 modelling framework, it introduces a significant overhead that is omitted in this way.
 
 ## About this branch
-
-This branch provides an interface to the [LANCELOT sovler](https://github.com/ralna/GALAHAD). LANCELOT is a sophisticated
-non-convex solver which can now be invoked using the solver `:LANCELOT`. Note that contrary to all other methods, this will
-*not* result in an optimization that is based on convex relaxations; no global guarantees are made. Futher notes:
-
-- We call `LANCELOT_simple`, which does not make use of all the potential sophistication LANCELOT provides as regards the use
-  of variables.
-- You will have to download and compile the GALAHAD library first using the GFortran compiler (at least version 9). Since
-  LANCELOT currently only has a Fortran interface, we need to rely on compiler internals to call it. Memory corruption will
-  definitely occur if the library was compiled with a version of GFortran smaller than 9 or e.g., Intel Fortran. Both use
-  different formats for the array descriptors.
-- You will have to set up an environment variable `JULIA_GALAHAD_LIBRARY_PATH` containing the path to the `libgalahad_double_d`
-  shared library whenever you import `PolynomialOptimization`. If this variable is not present, you'll be asked for the file
-  path every you import the package.
+This branch implements the [STRIDE solver](https://doi.org/10.1007/s10107-022-01912-6) and provides the `:STRIDE` algorithm
+as an interface to `PolynomialOptimization`. Note that STRIDE requires local optimizer. If none is specified, by default
+LANCELOT is invoked (see also the notes on the `lancelot` branch).
+We also do not perform the BFGS step that is detailed in the solver. Experiments (including their own code) have not shown any
+significant advantage of this step (see also the `stride-experiments` branch).
+In general, STRIDE does not appear to perform particularly well.
 
 ## Compatibility notice
 Currently, the required complex-valued functionality depends on a not-yet-merged request in
