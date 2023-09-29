@@ -280,7 +280,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
     subsolver::Symbol=:Mosek) where {R}
     #region Input validation
-    subsolver === :Mosek || error("Unsupported subsolver ", subsolver)
+    subsolver ∈ (:Mosek, :Clarabel) || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
     # We do not store the matrices A directly, but instead interpret all PSD variables by their scaled vectorized upper
     # triangle (contrary to the reference implementation, which uses vectorized full storage). Therefore, A contains the
@@ -523,6 +523,7 @@ if isdefined(Mosek, :appendafes)
         @warn "The SpecBM method Mosek is not available: upgrade your Mosek distribution to at least version 10.1.11."
     end
 end
+include("SpecBMClarabel.jl")
 
 # identical to the implementation in SparseArrays, we just extend the allowed type for A, as this is already working
 function LinearAlgebra.mul!(C::StridedVecOrMat, A::SparseArrays.SparseMatrixCSCView, B::SparseArrays.DenseInputVecOrMat,
@@ -635,12 +636,7 @@ end
     mul!(cache.M₂₂, transpose(cache.Q₃₂), tmpm, -one(R), false)
     cache.Q₂₂ .+= one(R) # Q₂₂ is a diagonal view into M₂₂
 
-    # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
-    # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
-    # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
-    # other solvers which have a similar syntax.
-    Mfact = cholesky!(cache.M, RowMaximum(), tol=data.ϵ^2, check=false)
-    specbm_primal_subsolve!(mastersolver, cache, Mfact)
+    specbm_primal_subsolve!(mastersolver, cache)
 
     # Reconstruct y = Q₃₃⁻¹(q₃/2 - Q₃₁ γ - Q₃₂ svec(S))
     # Note that at this stage, we have already saved the original value of q₃ in y

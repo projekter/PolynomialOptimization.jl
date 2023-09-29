@@ -149,7 +149,12 @@ function mosekdump(task, fn)
     end
 end
 
-function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}, Mfact) where {R,F,ACV}
+function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache::SpecBMCache{R,F,ACV,SpecBMSubsolverMosek}) where {R,F,ACV}
+    # Now we have the matrix M and can in principle directly invoke Mosek using putqobj. However, this employs a sparse
+    # Cholesky factorization for large matrices. In our case, the matrix M is dense and not very large, so we are better of
+    # calculating the dense factorization by ourselves and then using the conic formulation. This also makes it easier to use
+    # other solvers which have a similar syntax.
+    Mfact = cholesky!(cache.M, RowMaximum(), tol=sqrt(eps(R)), check=false)
     data = cache.subsolver
     num_psds = length(cache.m₁)
     cfz = Iterators.countfrom(zero(Int32))
@@ -198,7 +203,7 @@ function specbm_primal_subsolve!(mastersolver::SpecBMMastersolverData{R}, cache:
     # Bug in Mosek < 10.1.11 (that's why we disable the method for these versions): The changed data will not be processed
     # correctly in the solution. In principle, a very inefficient solution is to store the task in TASK format (others are also
     # broken prior to 10.1.11) and re-load it. We don't even offer this as a workaround, but hypothetically speaking, it works.
-    #Mosek.@MSK_writedata(taskptr, "task.task")
+    Mosek.@MSK_writedata(taskptr, "task.jtask")
     #Mosek.@MSK_readdata(taskptr, "task.task")
     Mosek.optimize(data.task)
     solutionsta = Mosek.getsolsta(data.task, Mosek.MSK_SOL_ITR)
