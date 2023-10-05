@@ -27,4 +27,7 @@ optimize = true
     @testset "Packed matrices" begin
         include("./PackedMatrices.jl")
     end
+    @testset "LANCELOT solver" begin
+        include("./LocalSolver.jl")
+    end
 end

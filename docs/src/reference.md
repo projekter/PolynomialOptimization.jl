@@ -92,6 +92,13 @@ Base.similar(::FastVec{V}) where {V}
 finish!
 ```
 
+## Lancelot
+`PolynomialOptimization` provides an interface to LANCELOT. This is only temporary, as the GALAHAD developers are developing
+Julia interfaces themselves (in fact, this is already there - but LANCELOT is the only part that not even has a C interface).
+```@docs
+LANCELOT_simple
+```
+
 ## PackedMatrices
 The SpecBM solver works with matrices in packed storage format. There are a lot of LAPACK routines that natively support this
 format, which offers superior storage (at the cost of worse runtime and precision); however, Julia does not natively provide
