@@ -304,7 +304,7 @@ function poly_all_solutions(state::AbstractSparsity, ϵ::R=1e-6, δ::R=1e-3; ver
     rel_threshold::Float64=100., abs_threshold::Float64=Inf, method::Symbol=default_solution_method(state, missing)) where {R<:Real}
     if method === :heuristic
         sol_itr = poly_solutions_heuristic(sparse_problem(state); verbose)
-    elseif method === :heuristic
+    elseif method === :mvhankel
         sol_itr = poly_solutions(state, ϵ, δ; verbose)
     else
         error("Unknown solution extraction method: $method")
