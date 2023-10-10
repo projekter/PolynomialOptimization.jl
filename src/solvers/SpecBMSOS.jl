@@ -46,7 +46,7 @@ function sos_matrix!(sbm::SpecBMState{M,R}, gröbner_basis, grouping::AbstractVe
     items = (dim * (dim +1)) >> 1
     @assert(!isempty(sbm.A[2])) # the moment matrix is already there
     i = last(sbm.A[2]) +1
-    prepare_push!.(sbm.A, items * nterms(constraint))
+    prepare_push!.(sbm.A, items * sum(nterms, constraint, init=0))
     for exp2 in 1:lg
         for block_j in 1:block_size
             for exp1 in exp2:lg
@@ -57,11 +57,13 @@ function sos_matrix!(sbm::SpecBMState{M,R}, gröbner_basis, grouping::AbstractVe
                             if gröbner_basis isa EmptyGröbnerBasis
                                 unsafe_push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 unsafe_push!(sbm.A[2], i)
-                                unsafe_push!(sbm.A[3], exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
+                                unsafe_push!(sbm.A[3], exp2 == exp1 && block_j == block_i ? R(coefficient(term)) :
+                                    sqrt(R(2)) * coefficient(term))
                             else
                                 push!(sbm.A[1], get_constraint!(sbm, monomial(term)))
                                 push!(sbm.A[2], i)
-                                push!(sbm.A[3], exp2 == exp1 ? R(coefficient(term)) : sqrt(R(2)) * coefficient(term))
+                                push!(sbm.A[3], exp2 == exp1 && block_j == block_i ? R(coefficient(term)) :
+                                    sqrt(R(2)) * coefficient(term))
                             end
                         end
                     end
