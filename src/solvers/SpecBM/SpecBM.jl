@@ -262,7 +262,7 @@ Contains the result of a SpecBM run
 - `x::Vector{R}`: the optimal vector of primal variables: first, `num_frees` free variables, then all scaled vectorized lower
   triangles of the PSD variables
 - `y::Vector{R}`: the optimal vector of dual variables, one for each constraint
-- `iterators::Int`: the number of iterations until the given status was reached
+- `iterations::Int`: the number of iterations until the given status was reached
 - `quality::R`: the optimality quantifier that is compared against `ϵ` to determine convergence, which is determined by the
   maximum of the relative quantities below and the negative primal infeasibility.
 - `primal_infeas::R`
