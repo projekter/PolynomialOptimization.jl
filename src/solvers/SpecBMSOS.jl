@@ -175,7 +175,8 @@ function sparse_optimize(::Val{:SpecBMSOS}, problem::PolyOptProblem{P,M,V}, grou
     # Now we need to figure out some proper default arguments. Let us rely on the adaptive strategies in the solver to do this
     # instead of some sophisticated analysis that might give us better values provided the problem features certain
     # constraints.
-    args = merge!(Dict(:ρ => R(10), :adaptiveρ => true, :r_past => 0, :r_current => 3), kwargs)
+    args = merge!(Dict{Symbol,Any}(:ρ => R(10), :adaptiveρ => !haskey(kwargs, :ρ), :r_past => 0, :r_current => 3,
+        :ϵ => R(1e-5)), kwargs)
 
     solve_time = @elapsed begin
         result = specbm_primal(A, b, c; num_frees, psds=finish!(sbm.psds), verbose, At, args...)
