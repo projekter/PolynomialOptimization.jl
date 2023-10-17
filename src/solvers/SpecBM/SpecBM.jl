@@ -251,6 +251,8 @@ function Base.getproperty(c::SpecBMCache, name::Symbol)
 end
 Base.propertynames(::SpecBMCache) = (:q₁, :q₂s, fieldnames(SpecBMCache)...)
 
+const specbm_warn_openblas = Ref{Bool}(true)
+
 """
     SpecBMResult
 
@@ -363,6 +365,10 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
     verbose::Bool=true, step::Integer=20, offset::R=zero(R),
     At::Union{Missing,AbstractMatrix{R}}=missing, AAt::Union{Missing,AbstractMatrix{R}}=missing,
     subsolver::Symbol=:Mosek, callback::Function=(data, mastersolver_data) -> nothing) where {R<:AbstractFloat}
+    if specbm_warn_openblas[] && contains(BLAS.get_config().loaded_libs[1].libname, "openblas")
+        @warn("It is recommended to use an alternative to OpenBLAS for SpecBM, which appears to not use the CPU very efficiently (try 'using MKL').")
+        specbm_warn_openblas[] = false
+    end
     #region Input validation
     subsolver ∈ (:Mosek, :Hypatia) || error("Unsupported subsolver ", subsolver)
     # Problem data A₁, ..., Aₘ, C ∈ 𝕊ⁿ, b ∈ ℝⁿ. Here, we also allow for free variables, as in the reference implementation.
