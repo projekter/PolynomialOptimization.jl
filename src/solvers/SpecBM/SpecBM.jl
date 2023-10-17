@@ -32,7 +32,7 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
 
     function SpecBMData(num_vars::Integer, num_frees::Integer, psds::AbstractVector{<:Integer}, r::Vector{Int}, ϵ::R,
         A::AbstractMatrix{R}, At::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVector{R}) where {R}
-        @inbounds begin
+        @inbounds @views begin
             @assert(length(psds) == length(r))
             num_psdvars = sum(packedsize, psds, init=0)
             @assert(num_frees + num_psdvars == num_vars)
@@ -40,23 +40,23 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
             # allocated problem data
             Ω = zeros(R, num_vars)
             w_psd = zeros(R, num_psdvars)
-            W_psds = Vector{PackedMatrix{R,typeof(@view(w_psd[begin:end])),:LS}}(undef, num_psds)
+            W_psds = Vector{PackedMatrix{R,typeof(w_psd[begin:end]),:LS}}(undef, num_psds)
             P_psds = Vector{Matrix{R}}(undef, num_psds)
             # views into existing data
-            a_free = @view(A[:, 1:num_frees])
-            a_psd = @view(A[:, num_frees+1:end])
-            a_psds = Vector{typeof(@view(A[:, begin:end]))}(undef, num_psds)
-            c_free = @view(c[1:num_frees])
-            c_psd = @view(c[num_frees+1:end])
-            C_psds = Vector{PackedMatrix{R,typeof(@view(c[begin:end])),:LS}}(undef, num_psds)
-            ω_free = @view(Ω[1:num_frees])
-            ω_psd = @view(Ω[num_frees+1:end])
-            Ω_psds = Vector{PackedMatrix{R,typeof(@view(Ω[begin:end])),:LS}}(undef, num_psds)
+            a_free = A[:, 1:num_frees]
+            a_psd = A[:, num_frees+1:end]
+            a_psds = Vector{typeof(A[:, begin:end])}(undef, num_psds)
+            c_free = c[1:num_frees]
+            c_psd = c[num_frees+1:end]
+            C_psds = Vector{PackedMatrix{R,typeof(c[begin:end]),:LS}}(undef, num_psds)
+            ω_free = Ω[1:num_frees]
+            ω_psd = Ω[num_frees+1:end]
+            Ω_psds = Vector{PackedMatrix{R,typeof(Ω[begin:end]),:LS}}(undef, num_psds)
             i = num_frees +1
             for (j, (nⱼ, rⱼ)) in enumerate(zip(psds, r))
                 # initialize all the data and connect the views appropriately
                 dimⱼ = packedsize(nⱼ)
-                Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, @view(Ω[i:i+dimⱼ-1]), :LS)
+                Ω_psds[j] = Ωⱼ = PackedMatrix(nⱼ, Ω[i:i+dimⱼ-1], :LS)
                 # An initial point Ω₀ ∈ 𝕊ⁿ.  As in the reference implementation, we take zero for the free variables and the
                 # vectorized identity for the PSD variables.
                 for k in PackedDiagonalIterator(Ωⱼ)
@@ -66,7 +66,7 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
                 # Note that the reference implementation only allows for a single block; we map this to multiple semidefinite
                 # constraints not merely by mimicking a block-diagonal matrix, but taking the constraints into account
                 # individually!
-                W_psds[j] = Wⱼ = PackedMatrix(nⱼ, @view(w_psd[i-num_frees:i-num_frees+dimⱼ-1]), :LS)
+                W_psds[j] = Wⱼ = PackedMatrix(nⱼ, w_psd[i-num_frees:i-num_frees+dimⱼ-1], :LS)
                 Wⱼ[1, 1] = one(R)
                 # Compute P₀ ∈ ℝⁿˣʳ with columns being the top r orthonormal eigenvectors of -Ω₀. As Ω₀ is the identity, we can
                 # do this explicitly.
@@ -74,8 +74,8 @@ struct SpecBMData{R,PType,AType,AtType,AVType,APVType,BType,CType,CVType}
                 for k in 1:rⱼ
                     Pⱼ[k, k] = one(R)
                 end
-                a_psds[j] = @view(A[:, i:i+dimⱼ-1])
-                C_psds[j] = PackedMatrix(nⱼ, @view(c[i:i+dimⱼ-1]), :LS)
+                a_psds[j] = A[:, i:i+dimⱼ-1]
+                C_psds[j] = PackedMatrix(nⱼ, c[i:i+dimⱼ-1], :LS)
 
                 i += dimⱼ
             end
