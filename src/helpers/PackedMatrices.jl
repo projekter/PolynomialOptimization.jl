@@ -505,7 +505,7 @@ for (spev, spevd, spevx, pptrf, spmv, spr, tpttr, trttp, gemmt, elty) in
         # *     ..
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   AP( * ), W( * ), WORK( * ), Z( LDZ, * )
-        function spev!(jobz::AbstractChar, uplo::AbstractChar, n::Integer, AP::AbstractVector{$elty};
+        function spev!(jobz::AbstractChar, uplo::AbstractChar, n::Integer, AP::AbstractVector{$elty},
                        W::AbstractVector{$elty}=similar(AP, $elty, n),
                        Z::AbstractMatrix{$elty}=similar(AP, $elty, ldz, jobz == 'N' ? 0 : n),
                        work::AbstractVector{$elty}=Vector{$elty}(undef, 3n))
@@ -546,7 +546,7 @@ for (spev, spevd, spevx, pptrf, spmv, spr, tpttr, trttp, gemmt, elty) in
         #       INTEGER            IFAIL( * ), IWORK( * )
         #       DOUBLE PRECISION   AP( * ), W( * ), WORK( * ), Z( LDZ, * )
         function spevx!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, n::Integer, AP::AbstractVector{$elty},
-                        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat;
+                        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat,
                         W::AbstractVector{$elty}=similar(AP, $elty, n),
                         Z::AbstractMatrix{$elty}=similar(AP, $elty, n, jobz == 'N' ? 0 : (range == 'I' ? iu-il+1 : n)),
                         work::AbstractVector{$elty}=Vector{$elty}(undef, 8n),
@@ -612,7 +612,7 @@ for (spev, spevd, spevx, pptrf, spmv, spr, tpttr, trttp, gemmt, elty) in
         # *     .. Array Arguments ..
         # INTEGER            IWORK( * )
         # DOUBLE PRECISION   AP( * ), W( * ), WORK( * ), Z( LDZ, * )
-        function spevd!(jobz::AbstractChar, uplo::AbstractChar, n::Integer, AP::AbstractVector{$elty};
+        function spevd!(jobz::AbstractChar, uplo::AbstractChar, n::Integer, AP::AbstractVector{$elty},
                         W::AbstractVector{$elty}=similar(AP, $elty, n),
                         Z::AbstractMatrix{$elty}=similar(AP, $elty, n, jobz == 'N' ? 0 : n),
                         work::AbstractVector{$elty}=Vector{$elty}(undef, n ≤ 1 ? 1 : (jobz == 'N' ? 2n : 1 + 6n + n^2)),
@@ -1224,7 +1224,7 @@ LinearAlgebra.normMinusInf(P::PackedMatrixScaled{R}) where {R} = normapply((m, x
 LinearAlgebra.normp(P::PackedMatrix, p) = normapply((Σ, x, diag) -> Σ + (diag ? abs(x)^p : 2abs(x)^p), P)^(1/p)
 
 """
-    eigen!(P::PackedMatrix; kwargs...)
+    eigen!(P::PackedMatrix, args...)
 
 Compute the eigenvalue decomposition of `P`, returning an `Eigen` factorization object `F` which contains the eigenvalues in
 `F.values` and the eigenvectors in the columns of the matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice
@@ -1233,29 +1233,29 @@ Compute the eigenvalue decomposition of `P`, returning an `Eigen` factorization 
 This function calls [`spevd!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}; kwargs...) where {R<:Real} =
-    Eigen(spevd!('V', packed_ulchar(P), P.dim, P.data)...; kwargs...)
-function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}; kwargs...) where {R<:Real}
+LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}, args...) where {R<:Real} =
+    Eigen(spevd!('V', packed_ulchar(P), P.dim, P.data)..., args...)
+function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}, args...) where {R<:Real}
     fac = sqrt(R(2))
-    eval, evec = spevd!('V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data; kwargs...)
+    eval, evec = spevd!('V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, args...)
     return Eigen(rmul!(eval, inv(fac)), evec)
 end
 """
-    eigvals(P::PackedMatrix; kwargs...)
+    eigvals(P::PackedMatrix, args...)
 
 Return the eigenvalues of `P`.
 
 This function calls [`spevd!`](@ref) and will forward all keyword arguments. However, consider using [`eigvals!`](@ref) for a
 non-allocating version.
 """
-LinearAlgebra.eigvals(P::PackedMatrixUnscaled{R}; kwargs...) where {R<:Real} =
-    spevd!('N', packed_ulchar(P), P.dim, copy(P.data); kwargs...)
-function LinearAlgebra.eigvals(P::PackedMatrixScaled{R}; kwargs...) where {R<:Real}
+LinearAlgebra.eigvals(P::PackedMatrixUnscaled{R}, args...) where {R<:Real} =
+    spevd!('N', packed_ulchar(P), P.dim, copy(P.data), args...)
+function LinearAlgebra.eigvals(P::PackedMatrixScaled{R}, args...) where {R<:Real}
     fac = sqrt(R(2))
-    return rmul!(spevd!('N', packed_ulchar(P), P.dim, rmul_diags!(copy(P), fac).data; kwargs...), inv(fac))
+    return rmul!(spevd!('N', packed_ulchar(P), P.dim, rmul_diags!(copy(P), fac).data, args...), inv(fac))
 end
 """
-    eigen!(P::PackedMatrix{R}, vl::R, vu::R; kwargs...) where {R}
+    eigen!(P::PackedMatrix{R}, vl::R, vu::R, args...) where {R}
 
 Compute the eigenvalue decomposition of `P`, returning an `Eigen` factorization object `F` which contains the eigenvalues in
 `F.values` and the eigenvectors in the columns of the matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice
@@ -1266,16 +1266,16 @@ Compute the eigenvalue decomposition of `P`, returning an `Eigen` factorization 
 This function calls [`spevx!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}, vl::R, vu::R; kwargs...) where {R<:Real} =
-    Eigen(spevx!('V', 'V', packed_ulchar(P), P.dim, P.data, vl, vu, 0, 0, -one(R))...; kwargs...)
-function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}, vl::R, vu::R; kwargs...) where {R<:Real}
+LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}, vl::R, vu::R, args...) where {R<:Real} =
+    Eigen(spevx!('V', 'V', packed_ulchar(P), P.dim, P.data, vl, vu, 0, 0, -one(R), args...)...)
+function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}, vl::R, vu::R, args...) where {R<:Real}
     fac = sqrt(R(2))
-    eval, evec = spevx!('V', 'V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, vl * fac, vu * fac, 0, 0, -one(R);
-        kwargs...)
+    eval, evec = spevx!('V', 'V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, vl * fac, vu * fac, 0, 0, -one(R),
+        args...)
     return Eigen(rmul!(eval, inv(fac)), evec)
 end
 """
-    eigen!(P::PackedMatrix{R}, range::UnitRange; kwargs...) where {R}
+    eigen!(P::PackedMatrix{R}, range::UnitRange, args...) where {R}
 
 Compute the eigenvalue decomposition of `P`, returning an `Eigen` factorization object `F` which contains the eigenvalues in
 `F.values` and the eigenvectors in the columns of the matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice
@@ -1286,27 +1286,26 @@ The `UnitRange` `range` specifies indices of the sorted eigenvalues to search fo
 This function calls [`spevx!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}, range::UnitRange; kwargs...) where {R<:Real} =
-    Eigen(spevx!('V', 'I', packed_ulchar(P), P.dim, P.data, zero(R), zero(R), range.start, range.stop, -one(R);
-        kwargs...)...)
-function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}, range::UnitRange; kwargs...) where {R<:Real}
+LinearAlgebra.eigen!(P::PackedMatrixUnscaled{R}, range::UnitRange, args...) where {R<:Real} =
+    Eigen(spevx!('V', 'I', packed_ulchar(P), P.dim, P.data, zero(R), zero(R), range.start, range.stop, -one(R), args...)...)
+function LinearAlgebra.eigen!(P::PackedMatrixScaled{R}, range::UnitRange, args...) where {R<:Real}
     fac = sqrt(R(2))
     eval, evec = spevx!('V', 'I', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, zero(R), zero(R), range.start,
-        range.stop, -one(R); kwargs...)
+        range.stop, -one(R), args...)
     return Eigen(rmul!(eval, inv(fac)), evec)
 end
 """
-    eigvals!(P::PackedMatrix; kwargs...)
+    eigvals!(P::PackedMatrix, args...)
 
 Return the eigenvalues of `P`, overwriting `P` in the progress.
 
 This function calls [`spevd!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}; kwargs...) where {R<:Real} =
-    spevd!('N', packed_ulchar(P), P.dim, P.data; kwargs...)
+LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}, args...) where {R<:Real} =
+    spevd!('N', packed_ulchar(P), P.dim, P.data, args...)
 """
-    eigvals!(P::PackedMatrix, vl::Real, vu::Real; kwargs...)
+    eigvals!(P::PackedMatrix, vl::Real, vu::Real, args...)
 
 Return the eigenvalues of `P`. It is possible to calculate only a subset of the eigenvalues by specifying a pair `vl` and `vu`
 for the lower and upper boundaries of the eigenvalues.
@@ -1314,15 +1313,15 @@ for the lower and upper boundaries of the eigenvalues.
 This function calls [`spevx!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}, vl::R, vu::R; kwargs...) where {R<:Real} =
-    spevx!('N', 'V', packed_ulchar(P), P.dim, P.data, vl, vu, 0, 0, -one(R); kwargs...)[1]
-function LinearAlgebra.eigvals!(P::PackedMatrixScaled{R}, vl::R, vu::R; kwargs...) where {R<:Real}
+LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}, vl::R, vu::R, args...) where {R<:Real} =
+    spevx!('N', 'V', packed_ulchar(P), P.dim, P.data, vl, vu, 0, 0, -one(R), args...)[1]
+function LinearAlgebra.eigvals!(P::PackedMatrixScaled{R}, vl::R, vu::R, args...) where {R<:Real}
     fac = sqrt(R(2))
-    return rmul!(spevx!('N', 'V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, vl * fac, vu * fac, 0, 0, -one(R);
-        kwargs...)[1], inv(fac))
+    return rmul!(spevx!('N', 'V', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, vl * fac, vu * fac, 0, 0, -one(R),
+        args...)[1], inv(fac))
 end
 """
-    eigvals!(P::PackedMatrix, range::UnitRange; kwargs...)
+    eigvals!(P::PackedMatrix, range::UnitRange, args...)
 
 Return the eigenvalues of `P`. It is possible to calculate only a subset of the eigenvalues by specifying a `UnitRange` `range`
 covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.
@@ -1330,29 +1329,29 @@ covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.
 This function calls [`spevx!`](@ref) and will forward all keyword arguments, which allow this operation to be truely
 non-allocating.
 """
-LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}, range::UnitRange; kwargs...) where {R<:Real} =
-    spevx!('N', 'I', packed_ulchar(P), P.dim, P.data, zero(R), zero(R), range.start, range.stop, -one(R); kwargs...)[1]
-function LinearAlgebra.eigvals!(P::PackedMatrixScaled{R}, range::UnitRange; kwargs...) where {R<:Real}
+LinearAlgebra.eigvals!(P::PackedMatrixUnscaled{R}, range::UnitRange, args...) where {R<:Real} =
+    spevx!('N', 'I', packed_ulchar(P), P.dim, P.data, zero(R), zero(R), range.start, range.stop, -one(R), args...)[1]
+function LinearAlgebra.eigvals!(P::PackedMatrixScaled{R}, range::UnitRange, args...) where {R<:Real}
     fac = sqrt(R(2))
     return rmul!(spevx!('N', 'I', packed_ulchar(P), P.dim, rmul_diags!(P, fac).data, zero(R), zero(R), range.start,
-        range.stop, -one(R); kwargs...)[1], inv(fac))
+        range.stop, -one(R), args...)[1], inv(fac))
 end
 """
-    eigmin!(P::PackedMatrix; kwargs...)
+    eigmin!(P::PackedMatrix, args...)
 
 Return the smallest eigenvalue of `P`, overwriting `P` in the progress.
 
 See also [`eigvals!`](@ref).
 """
-eigmin!(P::PackedMatrix; kwargs...) = eigvals!(P, 1:1; kwargs...)[1]
+eigmin!(P::PackedMatrix, args...) = eigvals!(P, 1:1, args...)[1]
 """
-    eigmax!(P::PackedMatrix; kwargs...)
+    eigmax!(P::PackedMatrix, args...)
 
 Return the largest eigenvalue of `P`, overwriting `P` in the progress.
 
 See also [`eigvals!`](@ref).
 """
-eigmax!(P::PackedMatrix; kwargs...) = eigvals!(P, P.dim:P.dim; kwargs...)[1]
+eigmax!(P::PackedMatrix, args...) = eigvals!(P, P.dim:P.dim, args...)[1]
 LinearAlgebra.eigmin(P::PackedMatrix) = eigmin!(copy(P))
 LinearAlgebra.eigmax(P::PackedMatrix) = eigmax!(copy(P))
 """

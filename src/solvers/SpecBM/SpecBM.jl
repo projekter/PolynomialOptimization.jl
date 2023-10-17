@@ -468,9 +468,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
             # we need the eigendecomposition for later in every case
             for (j, ((ev, work, iwork, ifail, _), Xstarⱼ)) in enumerate(zip(cache.eigens, mastersolver.Xstar_psds))
                 if ==(size(ev.vectors)...)
-                    eigen!(Xstarⱼ; W=ev.values, Z=ev.vectors, work)
+                    eigen!(Xstarⱼ, ev.values, ev.vectors, work)
                 else
-                    @inbounds eigen!(Xstarⱼ, 1:r_current[j]; W=ev.values, Z=ev.vectors, work, iwork, ifail)
+                    @inbounds eigen!(Xstarⱼ, 1:r_current[j], ev.values, ev.vectors, work, iwork, ifail)
                 end
             end
         # 7: else
@@ -484,7 +484,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                     Ωcopy = PackedMatrix(LinearAlgebra.checksquare(Ωⱼ), gettmp(cache, length(Ωⱼ)),
                         PackedMatrices.packed_format(Ωⱼ))
                     copyto!(Ωcopy, Ωⱼ)
-                    Σ += min(eigmin!(Ωcopy; W=ev.values, Z=ev.vectors, work, iwork, ifail), zero(R))
+                    Σ += min(eigmin!(Ωcopy, ev.values, ev.vectors, work, iwork, ifail), zero(R))
                 end
                 FΩ = dot(data.c, data.Ω) - ρ * Σ
                 # else we do not need to recalculate this, it did not change from the previous iteration
@@ -497,9 +497,9 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                     PackedMatrices.packed_format(Xstarⱼ))
                 copyto!(Xcopy, Xstarⱼ)
                 if ==(size(ev.vectors)...)
-                    eigen!(Xcopy; W=ev.values, Z=ev.vectors, work)
+                    eigen!(Xcopy, ev.values, ev.vectors, work, iwork)
                 else
-                    @inbounds eigen!(Xcopy, 1:r_current[j]; W=ev.values, Z=ev.vectors, work, iwork, ifail)
+                    @inbounds eigen!(Xcopy, 1:r_current[j], ev.values, ev.vectors, work, iwork, ifail)
                 end
                 Σ += min(first(ev.values), zero(R))
             end
@@ -552,7 +552,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 copyto!(Pⱼ, V.vectors)
             else
                 γstarⱼ = max(mastersolver.γstars[j], zero(R)) # prevent numerical issues
-                Sstareig = eigen!(mastersolver.Sstar_psds[j], W=evⱼ[1].values, Z=evⱼ[5], work=evⱼ[2])
+                Sstareig = eigen!(mastersolver.Sstar_psds[j], evⱼ[1].values, evⱼ[5], evⱼ[2])
                 Q₁ = @view(Sstareig.vectors[:, end-r_pastⱼ+1:end]) # sorted in ascending order; we need the largest rₚ, but
                                                                    # the order doesn't really matter
                 Q₂ = @view(Sstareig.vectors[:, 1:end-r_pastⱼ])
