@@ -218,7 +218,7 @@ struct SpecBMCache{R,F,ACV,SS}
                 eigens[j] = ( # we need nⱼ buffer space for the eigenvalues
                     Eigen(Vector{R}(undef, nⱼ), Matrix{R}(undef, nⱼ, min(r_currentⱼ, nⱼ))),
                     Vector{R}(undef, max(8nⱼ, 1 + 6rⱼ + rⱼ^2)),
-                    Vector{BLAS.BlasInt}(undef, 5nⱼ),
+                    Vector{BLAS.BlasInt}(undef,  max(5nⱼ, 3 + 5rⱼ)),
                     Vector{BLAS.BlasInt}(undef, nⱼ),
                     Matrix{R}(undef, rⱼ, rⱼ)
                 )
@@ -412,7 +412,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
         mr > β || error("mr must be larger than β")
         0 < ml < β || error("ml must be in (0, β)")
         0 < Nmin || error("Nmin must be positive")
-        !iszero(maxnodescent) || maxnodescent ≥ Nmin || error("maxnodescend must not be smaller than Nmin")
+        iszero(maxnodescent) || maxnodescent ≥ Nmin || error("maxnodescend must not be smaller than Nmin")
         α = inv(R(2))
     end
     if ismissing(At)
@@ -552,7 +552,7 @@ function specbm_primal(A::AbstractMatrix{R}, b::AbstractVector{R}, c::AbstractVe
                 copyto!(Pⱼ, V.vectors)
             else
                 γstarⱼ = max(mastersolver.γstars[j], zero(R)) # prevent numerical issues
-                Sstareig = eigen!(mastersolver.Sstar_psds[j], evⱼ[1].values, evⱼ[5], evⱼ[2])
+                Sstareig = eigen!(mastersolver.Sstar_psds[j], @view(evⱼ[1].values[1:rⱼ]), evⱼ[5][:, 1:rⱼ], evⱼ[2], evⱼ[4])
                 Q₁ = @view(Sstareig.vectors[:, end-r_pastⱼ+1:end]) # sorted in ascending order; we need the largest rₚ, but
                                                                    # the order doesn't really matter
                 Q₂ = @view(Sstareig.vectors[:, 1:end-r_pastⱼ])
