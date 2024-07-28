@@ -1,40 +1,37 @@
-pushnm!(a::AbstractVector, ::Missing) = missing
-pushnm!(a::AbstractVector, x) = (push!(a, x); x)
-
 mutable struct LANCELOT_problem_type
     n::Cint
     ng::Cint
     nel::Cint
-    IELING::GFortranVectorDescriptorRaw{Cint}
-    ISTADG::GFortranVectorDescriptorRaw{Cint}
-    IELVAR::GFortranVectorDescriptorRaw{Cint}
-    ISTAEV::GFortranVectorDescriptorRaw{Cint}
-    INTVAR::GFortranVectorDescriptorRaw{Cint}
-    ISTADH::GFortranVectorDescriptorRaw{Cint}
-    ICNA::GFortranVectorDescriptorRaw{Cint}
-    ISTADA::GFortranVectorDescriptorRaw{Cint}
-    KNDOFG::GFortranVectorDescriptorRaw{Cint}
-    ITYPEE::GFortranVectorDescriptorRaw{Cint}
-    ISTEPA::GFortranVectorDescriptorRaw{Cint}
-    ITYPEG::GFortranVectorDescriptorRaw{Cint}
-    ISTGPA::GFortranVectorDescriptorRaw{Cint}
-    A::GFortranVectorDescriptorRaw{Cdouble}
-    B::GFortranVectorDescriptorRaw{Cdouble}
-    BL::GFortranVectorDescriptorRaw{Cdouble}
-    BU::GFortranVectorDescriptorRaw{Cdouble}
-    X::GFortranVectorDescriptorRaw{Cdouble}
-    C::GFortranVectorDescriptorRaw{Cdouble}
-    Y::GFortranVectorDescriptorRaw{Cdouble}
-    GSCALE::GFortranVectorDescriptorRaw{Cdouble}
-    ESCALE::GFortranVectorDescriptorRaw{Cdouble}
-    VSCALE::GFortranVectorDescriptorRaw{Cdouble}
-    EPVALU::GFortranVectorDescriptorRaw{Cdouble}
-    GPVALU::GFortranVectorDescriptorRaw{Cdouble}
-    GXEQX::GFortranVectorDescriptorRaw{FortranBool}
-    INTREP::GFortranVectorDescriptorRaw{FortranBool}
-    VNAMES::GFortranVectorDescriptorRaw{FortranString{10}}
-    GNAMES::GFortranVectorDescriptorRaw{FortranString{10}}
-    _gc::Vector{AbstractVector}
+    IELING::FVector{Cint}
+    ISTADG::FVector{Cint}
+    IELVAR::FVector{Cint}
+    ISTAEV::FVector{Cint}
+    INTVAR::FVector{Cint}
+    ISTADH::FVector{Cint}
+    ICNA::FVector{Cint}
+    ISTADA::FVector{Cint}
+    KNDOFG::FVector{Cint}
+    ITYPEE::FVector{Cint}
+    ISTEPA::FVector{Cint}
+    ITYPEG::FVector{Cint}
+    ISTGPA::FVector{Cint}
+    A::FVector{Cdouble}
+    B::FVector{Cdouble}
+    BL::FVector{Cdouble}
+    BU::FVector{Cdouble}
+    X::FVector{Cdouble}
+    C::FVector{Cdouble}
+    Y::FVector{Cdouble}
+    GSCALE::FVector{Cdouble}
+    ESCALE::FVector{Cdouble}
+    VSCALE::FVector{Cdouble}
+    EPVALU::FVector{Cdouble}
+    GPVALU::FVector{Cdouble}
+    GXEQX::FVector{FortranBool}
+    INTREP::FVector{FortranBool}
+    VNAMES::FVector{FortranString{10}}
+    GNAMES::FVector{FortranString{10}}
+    _gc::Vector{Any}
 
     @doc raw"""
     LANCELOT_problem_type(; IELING, ISTADG, IELVAR, ISTAEV, INTVAR, ISTADH, ICNA, ISTADA
@@ -180,40 +177,38 @@ Creates a new problem for LANCELOT.
             length(INTREP) == nel &&
             length(VNAMES) == n &&
             length(GNAMES) == ng) || throw(ArgumentError("The input parameter sizes were not suitable"))
-        _gc = AbstractVector[]
+        _gc = Any[]
         new(
             n, ng, nel,
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, IELING)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ISTADG)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, IELVAR)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ISTAEV)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, INTVAR)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, Vector{Cint}(undef, nel +1))),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ICNA)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ISTADA)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, KNDOFG)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ITYPEE)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ISTEPA)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ITYPEG)),
-            GFortranVectorDescriptorRaw{Cint}(pushnm!(_gc, ISTGPA)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, A)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, B)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, BL)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, BU)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, X)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, C)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, Y)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, GSCALE)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, ESCALE)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, VSCALE)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, EPVALU)),
-            GFortranVectorDescriptorRaw{Cdouble}(pushnm!(_gc, GPVALU)),
-            GFortranVectorDescriptorRaw{FortranBool}(pushnm!(_gc, eltype(GXEQX) === FortranBool ? GXEQX :
-                                                                                convert(AbstractVector{FortranBool}, GXEQX))),
-            GFortranVectorDescriptorRaw{FortranBool}(pushnm!(_gc, eltype(INTREP) === FortranBool ? INTREP :
-                                                                                convert(AbstractVector{FortranBool}, INTREP))),
-            GFortranVectorDescriptorRaw{FortranString{10}}(pushnm!(_gc, FortranString{10}.(VNAMES))),
-            GFortranVectorDescriptorRaw{FortranString{10}}(pushnm!(_gc, FortranString{10}.(GNAMES))),
+            FVector{Cint}(IELING, _gc),
+            FVector{Cint}(ISTADG, _gc),
+            FVector{Cint}(IELVAR, _gc),
+            FVector{Cint}(ISTAEV, _gc),
+            FVector{Cint}(INTVAR, _gc),
+            FVector{Cint}(Vector{Cint}(undef, nel +1), _gc),
+            FVector{Cint}(ICNA, _gc),
+            FVector{Cint}(ISTADA, _gc),
+            FVector{Cint}(KNDOFG, _gc),
+            FVector{Cint}(ITYPEE, _gc),
+            FVector{Cint}(ISTEPA, _gc),
+            FVector{Cint}(ITYPEG, _gc),
+            FVector{Cint}(ISTGPA, _gc),
+            FVector{Cdouble}(A, _gc),
+            FVector{Cdouble}(B, _gc),
+            FVector{Cdouble}(BL, _gc),
+            FVector{Cdouble}(BU, _gc),
+            FVector{Cdouble}(X, _gc),
+            FVector{Cdouble}(C, _gc),
+            FVector{Cdouble}(Y, _gc),
+            FVector{Cdouble}(GSCALE, _gc),
+            FVector{Cdouble}(ESCALE, _gc),
+            FVector{Cdouble}(VSCALE, _gc),
+            FVector{Cdouble}(EPVALU, _gc),
+            FVector{Cdouble}(GPVALU, _gc),
+            FVector{FortranBool}(eltype(GXEQX) === FortranBool ? GXEQX : convert(AbstractVector{FortranBool}, GXEQX), _gc),
+            FVector{FortranBool}(eltype(INTREP) === FortranBool ? INTREP : convert(AbstractVector{FortranBool}, INTREP), _gc),
+            FVector{FortranString{10}}(FortranString{10}.(VNAMES), _gc),
+            FVector{FortranString{10}}(FortranString{10}.(GNAMES), _gc),
             _gc
         )
     end
@@ -325,12 +320,12 @@ end
     m::Cint = 0 # uninitialized
     m_max::Cint = 0 # uninitialized
     class::Cint = 0
-    BD_row::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    BD_col_start::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    CD_col::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    CD_row_start::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    BD_val::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    CD_val::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
+    BD_row::FVector{Cint} = FVector{Cint}()
+    BD_col_start::FVector{Cint} = FVector{Cint}()
+    CD_col::FVector{Cint} = FVector{Cint}()
+    CD_row_start::FVector{Cint} = FVector{Cint}()
+    BD_val::FVector{Cdouble} = FVector{Cdouble}()
+    CD_val::FVector{Cdouble} = FVector{Cdouble}()
 end
 
 @kwdef struct SCU_data_type
@@ -343,32 +338,32 @@ end
     class::Cint = 3
     got_factors::FortranBool = false # uninitialized
     dianew::Cdouble = 0. # uninitialized
-    R::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    W::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    Q::GFortranMatrixDescriptorRaw{Cdouble} = GFortranMatrixDescriptorRaw{Cdouble}()
+    R::FVector{Cdouble} = FVector{Cdouble}()
+    W::FVector{Cdouble} = FVector{Cdouble}()
+    Q::FMatrix{Cdouble} = FMatrix{Cdouble}()
 end
 
 @kwdef struct SMT_type
     m::Cint = 0 # uninitialized
     n::Cint = 0 # uninitialized
     ne::Cint = 0 # uninitialized
-    id::GFortranVectorDescriptorRaw{FortranChar} = GFortranVectorDescriptorRaw{FortranChar}()
-    type::GFortranVectorDescriptorRaw{FortranChar} = GFortranVectorDescriptorRaw{FortranChar}()
-    row::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    col::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ptr::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    val::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
+    id::FVector{FortranChar} = FVector{FortranChar}()
+    type::FVector{FortranChar} = FVector{FortranChar}()
+    row::FVector{Cint} = FVector{Cint}()
+    col::FVector{Cint} = FVector{Cint}()
+    ptr::FVector{Cint} = FVector{Cint}()
+    val::FVector{Cdouble} = FVector{Cdouble}()
 end
 
 @kwdef struct SILS_factors
-    keep::GFortranMatrixDescriptorRaw{Cint} = GFortranMatrixDescriptorRaw{Cint}()
-    # keep::GFortranVectorDescriptorRaw{Cint}
-    iw::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    iw1::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    iw2::GFortranMatrixDescriptorRaw{Cint} = GFortranMatrixDescriptorRaw{Cint}()
-    val::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    w::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    r::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
+    keep::FMatrix{Cint} = FMatrix{Cint}()
+    # keep::FVector{Cint}
+    iw::FVector{Cint} = FVector{Cint}()
+    iw1::FVector{Cint} = FVector{Cint}()
+    iw2::FMatrix{Cint} = FMatrix{Cint}()
+    val::FVector{Cdouble} = FVector{Cdouble}()
+    w::FVector{Cdouble} = FVector{Cdouble}()
+    r::FVector{Cdouble} = FVector{Cdouble}()
     n::Cint = -1
     nrltot::Cint = -1
     nirtot::Cint = -1
@@ -578,73 +573,73 @@ end
 
 @kwdef mutable struct LANCELOT_data_type
     S::LANCELOT_save_type = LANCELOT_save_type()
-    ITRANS::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ROW_start::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    POS_in_H::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    USED::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    FILLED::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    LINK_elem_uses_var::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    WTRANS::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    ISYMMD::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISWKSP::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISTAJC::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISTAGV::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISVGRP::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISLGRP::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IGCOLJ::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IVALJR::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IUSED::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ITYPER::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISSWTR::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISSITR::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISET::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISVSET::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    INVSET::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IFREE::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    INDEX::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IFREEC::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    INNONZ::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    LIST_elements::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    ISYMMH::GFortranMatrixDescriptorRaw{Cint} = GFortranMatrixDescriptorRaw{Cint}()
-    FUVALS_temp::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    P::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    X0::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    XCP::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    GX0::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    RADII::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    DELTAX::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    QGRAD::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    GRJAC::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    CDASH::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    C2DASH::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    GV_old::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    BND::GFortranMatrixDescriptorRaw{Cdouble} = GFortranMatrixDescriptorRaw{Cdouble}()
-    BND_radius::GFortranMatrixDescriptorRaw{Cdouble} = GFortranMatrixDescriptorRaw{Cdouble}()
-    IW_asmbl::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    NZ_comp_w::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    W_ws::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    W_el::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    W_in::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    H_el::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    H_in::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    IKEEP::GFortranMatrixDescriptorRaw{Cint} = GFortranMatrixDescriptorRaw{Cint}()
-    IW1::GFortranMatrixDescriptorRaw{Cint} = GFortranMatrixDescriptorRaw{Cint}()
-    IW::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    IVUSE::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    H_col_ptr::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    L_col_ptr::GFortranVectorDescriptorRaw{Cint} = GFortranVectorDescriptorRaw{Cint}()
-    W::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    RHS::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    RHS2::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    P2::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    G::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    DIAG::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    BREAKP::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    GRAD::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    W1::GFortranMatrixDescriptorRaw{Cdouble} = GFortranMatrixDescriptorRaw{Cdouble}()
-    OFFDIA::GFortranMatrixDescriptorRaw{Cdouble} = GFortranMatrixDescriptorRaw{Cdouble}()
-    GROUP_SCALING::GFortranVectorDescriptorRaw{Cdouble} = GFortranVectorDescriptorRaw{Cdouble}()
-    GXEQX_AUG::GFortranVectorDescriptorRaw{FortranBool} = GFortranVectorDescriptorRaw{FortranBool}()
+    ITRANS::FVector{Cint} = FVector{Cint}()
+    ROW_start::FVector{Cint} = FVector{Cint}()
+    POS_in_H::FVector{Cint} = FVector{Cint}()
+    USED::FVector{Cint} = FVector{Cint}()
+    FILLED::FVector{Cint} = FVector{Cint}()
+    LINK_elem_uses_var::FVector{Cint} = FVector{Cint}()
+    WTRANS::FVector{Cdouble} = FVector{Cdouble}()
+    ISYMMD::FVector{Cint} = FVector{Cint}()
+    ISWKSP::FVector{Cint} = FVector{Cint}()
+    ISTAJC::FVector{Cint} = FVector{Cint}()
+    ISTAGV::FVector{Cint} = FVector{Cint}()
+    ISVGRP::FVector{Cint} = FVector{Cint}()
+    ISLGRP::FVector{Cint} = FVector{Cint}()
+    IGCOLJ::FVector{Cint} = FVector{Cint}()
+    IVALJR::FVector{Cint} = FVector{Cint}()
+    IUSED::FVector{Cint} = FVector{Cint}()
+    ITYPER::FVector{Cint} = FVector{Cint}()
+    ISSWTR::FVector{Cint} = FVector{Cint}()
+    ISSITR::FVector{Cint} = FVector{Cint}()
+    ISET::FVector{Cint} = FVector{Cint}()
+    ISVSET::FVector{Cint} = FVector{Cint}()
+    INVSET::FVector{Cint} = FVector{Cint}()
+    IFREE::FVector{Cint} = FVector{Cint}()
+    INDEX::FVector{Cint} = FVector{Cint}()
+    IFREEC::FVector{Cint} = FVector{Cint}()
+    INNONZ::FVector{Cint} = FVector{Cint}()
+    LIST_elements::FVector{Cint} = FVector{Cint}()
+    ISYMMH::FMatrix{Cint} = FMatrix{Cint}()
+    FUVALS_temp::FVector{Cdouble} = FVector{Cdouble}()
+    P::FVector{Cdouble} = FVector{Cdouble}()
+    X0::FVector{Cdouble} = FVector{Cdouble}()
+    XCP::FVector{Cdouble} = FVector{Cdouble}()
+    GX0::FVector{Cdouble} = FVector{Cdouble}()
+    RADII::FVector{Cdouble} = FVector{Cdouble}()
+    DELTAX::FVector{Cdouble} = FVector{Cdouble}()
+    QGRAD::FVector{Cdouble} = FVector{Cdouble}()
+    GRJAC::FVector{Cdouble} = FVector{Cdouble}()
+    CDASH::FVector{Cdouble} = FVector{Cdouble}()
+    C2DASH::FVector{Cdouble} = FVector{Cdouble}()
+    GV_old::FVector{Cdouble} = FVector{Cdouble}()
+    BND::FMatrix{Cdouble} = FMatrix{Cdouble}()
+    BND_radius::FMatrix{Cdouble} = FMatrix{Cdouble}()
+    IW_asmbl::FVector{Cint} = FVector{Cint}()
+    NZ_comp_w::FVector{Cint} = FVector{Cint}()
+    W_ws::FVector{Cdouble} = FVector{Cdouble}()
+    W_el::FVector{Cdouble} = FVector{Cdouble}()
+    W_in::FVector{Cdouble} = FVector{Cdouble}()
+    H_el::FVector{Cdouble} = FVector{Cdouble}()
+    H_in::FVector{Cdouble} = FVector{Cdouble}()
+    IKEEP::FMatrix{Cint} = FMatrix{Cint}()
+    IW1::FMatrix{Cint} = FMatrix{Cint}()
+    IW::FVector{Cint} = FVector{Cint}()
+    IVUSE::FVector{Cint} = FVector{Cint}()
+    H_col_ptr::FVector{Cint} = FVector{Cint}()
+    L_col_ptr::FVector{Cint} = FVector{Cint}()
+    W::FVector{Cdouble} = FVector{Cdouble}()
+    RHS::FVector{Cdouble} = FVector{Cdouble}()
+    RHS2::FVector{Cdouble} = FVector{Cdouble}()
+    P2::FVector{Cdouble} = FVector{Cdouble}()
+    G::FVector{Cdouble} = FVector{Cdouble}()
+    DIAG::FVector{Cdouble} = FVector{Cdouble}()
+    BREAKP::FVector{Cdouble} = FVector{Cdouble}()
+    GRAD::FVector{Cdouble} = FVector{Cdouble}()
+    W1::FMatrix{Cdouble} = FMatrix{Cdouble}()
+    OFFDIA::FMatrix{Cdouble} = FMatrix{Cdouble}()
+    GROUP_SCALING::FVector{Cdouble} = FVector{Cdouble}()
+    GXEQX_AUG::FVector{FortranBool} = FVector{FortranBool}()
     SCU_matrix::SCU_matrix_type = SCU_matrix_type()
     SCU_data::SCU_data_type = SCU_data_type()
     matrix::SMT_type = SMT_type()
@@ -653,7 +648,7 @@ end
 
 @kwdef struct SILS_control
     ICNTL::NTuple{30,Cint} = (6, 6, 0, 2139062143, 1, 32639, 32639, 32639, 32639, 14, 9, 8, 8, 9, 10, 32639, 32639, 32639,
-    32689, 24, 11, 9, 8, 9, 10, 0, 0, 0, 0, 0)
+                              32689, 24, 11, 9, 8, 9, 10, 0, 0, 0, 0, 0)
     lp::Cint = 6
     wp::Cint = 6
     mp::Cint = 6
@@ -686,9 +681,7 @@ end
     error::Cint = 6
     out::Cint = 6
     alive_unit::Cint = 60
-    alive_file::NTuple{30,Cchar} = ('A', 'L', 'I', 'V', 'E', '.', 'd', ' ', ' ', ' ',
-                                    ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-                                    ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ')
+    alive_file::FortranString{30} = FortranString{30}("ALIVE.d                       ")
     print_level::Cint = 0
     maxit::Cint = 1000
     start_print::Cint = -1
@@ -834,7 +827,7 @@ end
     radius::Cdouble = 0.
     ciccg::Cdouble = 0.
     newsol::FortranBool = false
-    bad_alloc::NTuple{80,Cchar} = ntuple(_ -> ' ', 80)
+    bad_alloc::FortranString{80} = FortranString{80}(' ' ^ 80)
     SCU_info::SCU_inform_type = SCU_inform_type()
     SILS_infoa::SILS_ainfo = SILS_ainfo()
     SILS_infof::SILS_finfo = SILS_finfo()

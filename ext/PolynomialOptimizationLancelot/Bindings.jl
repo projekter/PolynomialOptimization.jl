@@ -2,8 +2,8 @@ export LANCELOT_simple
 
 include("./FortranSpecials.jl")
 
-_desc(::Nothing) = C_NULL
-_desc(x::AbstractArray) = Ref(convert(GFortranArrayDescriptor, x))
+_desc(::Nothing, _) = C_NULL
+_desc(x::AbstractArray, pushref) = Ref(convert(GFortranArrayDescriptor, x, pushref))
 
 #region LANCELOT_simple
 @doc raw"""
@@ -246,7 +246,7 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
     MY_FUN_F = @cfunction($((X, fx, i) -> begin
         unsafe_store!(fx, i == C_NULL ? MY_FUN(X[]) : MY_FUN(X[], Int(unsafe_load(i))))
         return
-    end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cdouble}, Ptr{Cint}))
+    end), Cvoid, (Ref{FVector{Cdouble}}, Ptr{Cdouble}, Ptr{Cint}))
     fx = Ref{Cdouble}(NaN)
     iters = Ref{Cint}(-1)
     exit_code = Ref{Cint}(-1)
@@ -258,7 +258,7 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
                 MY_GRAD(G[], X[], Int(unsafe_load(i)))
             end
             return
-        end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cint}))
+        end), Cvoid, (Ref{FVector{Cdouble}}, Ref{FVector{Cdouble}}, Ptr{Cint}))
     end
     if !ismissing(MY_HESS)
         MY_HESS_F = let n=n
@@ -269,27 +269,28 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
                     MY_HESS(SPMatrix(n, H[]), X[], unsafe_load(i))
                 end
                 return
-            end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cint}))
+            end), Cvoid, (Ref{FVector{Cdouble}}, Ref{FVector{Cdouble}}, Ptr{Cint}))
         end
     end
-    GC.@preserve BL BU CX Y (@ccall libgalahad_double.__lancelot_simple_double_MOD_lancelot_simple(
+    _gc = Any[]
+    GC.@preserve _gc (@ccall libgalahad_double.__lancelot_simple_double_MOD_lancelot_simple(
         n::Ref{Cint},                                   # INTEGER ( KIND = ip_ ), INTENT( IN ) :: n
-        _desc(X)::Ref{DoubleGVec},                      # REAL ( KIND = rp_ ), INTENT( INOUT ) :: X( : )
+        _desc(X, _gc)::Ref{FVector{Cdouble}},                 # REAL ( KIND = rp_ ), INTENT( INOUT ) :: X( : )
         MY_FUN_F::Ptr{Cvoid},
         fx::Ref{Cdouble},                               # REAL ( KIND = rp_ ), INTENT( OUT ) :: fx
         exit_code::Ref{Cint},                           # INTEGER ( KIND = ip_ ), INTENT( OUT ) :: exit_code
         (ismissing(MY_GRAD) ? C_NULL : MY_GRAD_F)::Ptr{Cvoid},
         (ismissing(MY_HESS) ? C_NULL : MY_HESS_F)::Ptr{Cvoid},
-        _desc(BL)::Ptr{DoubleGVec},                     # REAL ( KIND = rp_ ), OPTIONAL :: BL ( : )
-        _desc(BU)::Ptr{DoubleGVec},                     # REAL ( KIND = rp_ ), OPTIONAL :: BU ( : )
+        _desc(BL, _gc)::Ptr{FVector{Cdouble}},                # REAL ( KIND = rp_ ), OPTIONAL :: BL ( : )
+        _desc(BU, _gc)::Ptr{FVector{Cdouble}},                # REAL ( KIND = rp_ ), OPTIONAL :: BU ( : )
         C_NULL::Ptr{Cvoid},                             # CHARACTER ( LEN = 10 ), OPTIONAL :: VNAMES( : )
         C_NULL::Ptr{Cvoid},                             # CHARACTER ( LEN = 10 ), OPTIONAL :: CNAMES( : )
         neq::Ref{Cint},                                 # INTEGER ( KIND = ip_ ), OPTIONAL :: neq
                                                         # ^ optional is equivalent to 0, so we just require it
         nin::Ref{Cint},                                 # INTEGER ( KIND = ip_ ), OPTIONAL :: nin
                                                         # ^ optional is equivalent to 0, so we just require it
-        _desc(CX)::Ptr{DoubleGVec},                     # REAL ( KIND = rp_ ), OPTIONAL :: CX ( : )
-        _desc(Y)::Ptr{DoubleGVec},                      # REAL ( KIND = rp_ ), OPTIONAL :: Y ( : )
+        _desc(CX, _gc)::Ptr{FVector{Cdouble}},                # REAL ( KIND = rp_ ), OPTIONAL :: CX ( : )
+        _desc(Y, _gc)::Ptr{FVector{Cdouble}},                 # REAL ( KIND = rp_ ), OPTIONAL :: Y ( : )
         iters::Ref{Cint},                               # INTEGER ( KIND = ip_ ), OPTIONAL :: iters
         maxit::Ref{Cint},                               # INTEGER ( KIND = ip_ ), OPTIONAL :: maxit
                                                         # ^ optional is equivalent to 1000, so we just require it
@@ -299,8 +300,8 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
                                                         # ^ optional is equivalent to 1e-5, so we just require it
         print_level::Ref{Cint},                         # INTEGER ( KIND = ip_ ), OPTIONAL :: print_level
                                                         # ^ optional is equivalent to 1, so we just require it
-        0::Csize_t,                                     # maybe LEN(VNAMES)?
-        0::Csize_t,                                     # maybe LEN(CNAMES)?
+        0::Csize_t,                                     # align the stack
+        0::Csize_t,                                     # align the stack (why again?)
     )::Cvoid)
     return fx[], iters[], exit_code[]
 end
@@ -318,10 +319,12 @@ using [`LANCELOT_terminate`](@ref).
 function LANCELOT_initialize()
     data = LANCELOT_data_type()
     control = LANCELOT_control_type()
-    @ccall libgalahad_double.__lancelot_double_MOD_lancelot_initialize(
-        data::LANCELOT_data_type,      # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
-        control::LANCELOT_control_type # TYPE ( LANCELOT_control_type ), INTENT( OUT ) :: control
-    )::Cvoid
+    GC.@preserve data control begin
+        @ccall libgalahad_double.__lancelot_double_MOD_lancelot_initialize(
+            pointer_from_objref(data)::Ptr{LANCELOT_data_type},      # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+            pointer_from_objref(control)::Ptr{LANCELOT_control_type} # TYPE ( LANCELOT_control_type ), INTENT( OUT ) :: control
+        )::Cvoid
+    end
     return data, control
 end
 
@@ -743,9 +746,9 @@ function LANCELOT_solve(prob::LANCELOT_problem_type; RANGE::Base.Callable,
              Ptr{Cint})
         )
     end
-    GC.@preserve ELDERS begin
+    GC.@preserve prob control inform data ELDERS begin
         @ccall libgalahad_double.__lancelot_double_MOD_lancelot_solve(
-            prob::LANCELOT_problem_type,    # TYPE ( LANCELOT_problem_type ), INTENT( INOUT ), TARGET :: prob
+            pointer_from_objref(prob)::Ptr{LANCELOT_problem_type},    # TYPE ( LANCELOT_problem_type ), INTENT( INOUT ), TARGET :: prob
             RANGE_F::Ptr{Cvoid},
             GVALS::Ref{Cdouble},            # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%ng, 3 ) :: GVALS
             FT::Ref{Cdouble},               # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%ng ) :: FT
@@ -757,14 +760,15 @@ function LANCELOT_solve(prob::LANCELOT_problem_type; RANGE::Base.Callable,
             IVAR::Ref{Cint},                # INTEGER ( KIND = ip_ ), INTENT( INOUT ), DIMENSION( prob%n  ) :: IVAR
             Q::Ref{Cdouble},                # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%n ) :: Q
             DGRAD::Ref{Cdouble},            # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%n ) :: DGRAD
-            control::LANCELOT_control_type, # TYPE ( LANCELOT_control_type ), INTENT( INOUT ) :: control
-            inform::LANCELOT_inform_type,   # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
-            data::LANCELOT_data_type,       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+            pointer_from_objref(control)::Ptr{LANCELOT_control_type}, # TYPE ( LANCELOT_control_type ), INTENT( INOUT ) :: control
+            pointer_from_objref(inform)::Ptr{LANCELOT_inform_type},   # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
+            pointer_from_objref(data)::Ptr{LANCELOT_data_type},       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
             (ismissing(ELFUN) ? C_NULL : ELFUN_F)::Ptr{Cvoid},
             (ismissing(GROUP) ? C_NULL : GROUP_F)::Ptr{Cvoid},
             (ismissing(ELFUN_FLEXIBLE) ? C_NULL : ELFUN_FLEXIBLE_F)::Ptr{Cvoid},
-            (ismissing(ELDERS) ? Ptr{Cint}(C_NULL) : ELDERS)::Ptr{Cint}
+            (ismissing(ELDERS) ? Ptr{Cint}(C_NULL) : ELDERS)::Ptr{Cint},
                                         # INTEGER ( KIND = ip_ ), INTENT( INOUT ), OPTIONAL, DIMENSION( 2, prob%nel ) :: ELDERS
+            0::Csize_t                  # align the stack (the Fortran compiler does it, so let's do it as well...)
         )::Cvoid
     end
 end
@@ -781,10 +785,12 @@ All previously allocated arrays are deallocated with this function.
   return values of `status`, see Section 2.5 of the manual.
 """
 function LANCELOT_terminate(data::LANCELOT_data_type, control::LANCELOT_control_type, inform::LANCELOT_inform_type)
-    @ccall libgalahad_double.__lancelot_double_MOD_lancelot_terminate(
-        data::LANCELOT_data_type,       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
-        control::LANCELOT_control_type, # TYPE ( LANCELOT_control_type ), INTENT( IN ) :: control
-        inform::LANCELOT_inform_type    # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
-    )::Cvoid
+    GC.@preserve data control inform begin
+        @ccall libgalahad_double.__lancelot_double_MOD_lancelot_terminate(
+            pointer_from_objref(data)::Ptr{LANCELOT_data_type},       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+            pointer_from_objref(control)::Ptr{LANCELOT_control_type}, # TYPE ( LANCELOT_control_type ), INTENT( IN ) :: control
+            pointer_from_objref(inform)::Ptr{LANCELOT_inform_type}    # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
+        )::Cvoid
+    end
 end
 #endregion

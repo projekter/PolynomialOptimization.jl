@@ -84,29 +84,19 @@ struct GFortranArrayDescriptorDimension
     upper_bound::Cptrdiff_t
 end
 
-abstract type GFortranArrayDescriptor{T,N} <: AbstractArray{T,N} end
-
-struct GFortranArrayDescriptorRaw{T,N} <: GFortranArrayDescriptor{T,N}
+struct GFortranArrayDescriptor{T,N} <: AbstractArray{T,N}
     data::Ptr{T} # cannot be Ref, as this may be C_NULL
     offset::Cptrdiff_t
     dtype::GFortranArrayDescriptorDType
     span::Cptrdiff_t
     dim::NTuple{N,GFortranArrayDescriptorDimension}
 
-    GFortranArrayDescriptorRaw{T,N}(::Missing=missing) where {T,N} = new{T,N}(Ptr{T}(C_NULL)) # the rest is just uninitialized
-    GFortranArrayDescriptorRaw{T,N}(data::Ptr{T}, offset::Cptrdiff_t, dtype::GFortranArrayDescriptorDType, span::Cptrdiff_t,
+    GFortranArrayDescriptor{T,N}(::Missing=missing, _=missing) where {T,N} =
+        new{T,N}(Ptr{T}(C_NULL)) # the rest is just uninitialized
+    GFortranArrayDescriptor{T,N}(data::Ptr{T}, offset::Cptrdiff_t, dtype::GFortranArrayDescriptorDType, span::Cptrdiff_t,
         dim::NTuple{N,GFortranArrayDescriptorDimension}) where {T,N} = new{T,N}(data, offset, dtype, span, dim)
-    GFortranArrayDescriptorRaw{T,N}(a::AbstractArray{T,N}) where {T,N} = convert(GFortranArrayDescriptorRaw{T,N}, a)
-end
-
-struct GFortranArrayDescriptorBacked{T,N,A<:AbstractArray{T,N}} <: GFortranArrayDescriptor{T,N}
-    data::Ptr{T} # cannot be Ref, as this may be C_NULL
-    offset::Cptrdiff_t
-    dtype::GFortranArrayDescriptorDType
-    span::Cptrdiff_t
-    dim::NTuple{N,GFortranArrayDescriptorDimension}
-    # here the official struct ends
-    dataref::A # so it does not harm to add this field, plus it gives us GC compliance
+    GFortranArrayDescriptor{T,N}(a::AbstractArray{T,N}, pushref::AbstractVector) where {T,N} =
+        convert(GFortranArrayDescriptor{T,N}, a, pushref)
 end
 
 gfortran_array_element_type(::Type{<:Integer}) = Cchar(1)
@@ -117,15 +107,25 @@ gfortran_array_element_type(::Any) = Cchar(5)
 gfortran_array_element_type(::Type{<:Union{<:AbstractChar,AbstractString}}) = Cchar(6)
 # BT_CLASS, BT_PROCEDURE, BT_HOLLERITH, BT_VOID, BT_ASSUMED, BT_UNION, BT_BOZ not supported
 
-Base.convert(G::Type{<:GFortranArrayDescriptor}, X::AbstractArray{T,N}) where {T,N} =
-    convert(GFortranArrayDescriptorBacked{T,N}, X)
-function Base.convert(TT::Type{<:GFortranArrayDescriptor{T,N}}, X::AbstractArray{T,N}) where {T,N}
+Base.convert(G::Type{<:GFortranArrayDescriptor}, X::AbstractArray{T,N}, args...) where {T,N} =
+    convert(GFortranArrayDescriptor{T,N}, X, args...)
+function Base.convert(TT::Type{GFortranArrayDescriptor{T,N}}, X::AbstractArray{T,N}, pushref::AbstractVector) where {T,N}
     N ≤ 15 || throw(MethodError(convert, (TT, X)))
     s = strides(X)
     a = axes(X)
     eltype(a) <: AbstractUnitRange || throw(MethodError(convert, (TT, X)))
-    return (TT <: GFortranArrayDescriptorBacked ? GFortranArrayDescriptorBacked{T,N,typeof(X)} : TT)(
-        isempty(X) ? Ptr{T}() : pointer(X),
+    # Careful - GFortran assigns C_NULL to data if it is not allocated. To distinguish this from an allocated zero-length
+    # array, a one-byte malloc call is performed for empty arrays. To mimick this, we must at some place store a reference to
+    # this malloc data. Note that as we directly alias the Julia data, we won't allow the Fortran code to alter our data
+    # anyway, so we can just create a Ref. But we need to store this somewhere for bookkeeping.
+    if isempty(X)
+        data = Ptr{T}(Base.unsafe_convert(Ptr{UInt8}, push!(pushref, Ref{UInt8}(0))))
+    else
+        push!(pushref, X)
+        data = pointer(X)
+    end
+    return TT(
+        data,
         -sum(first(aᵢ) * sᵢ for (aᵢ, sᵢ) in zip(a, s); init=0),
         GFortranArrayDescriptorDType(
             sizeof(T),
@@ -137,29 +137,22 @@ function Base.convert(TT::Type{<:GFortranArrayDescriptor{T,N}}, X::AbstractArray
         ),
         sizeof(T), # span appears to be identical to the elem_len (at least in all considered cases)
         ntuple(let s=s, a=a; i -> @inbounds GFortranArrayDescriptorDimension(s[i], first(a[i]), last(a[i])) end, N),
-        (TT <: GFortranArrayDescriptorBacked ? (X,) : ())...
     )
 end
 Base.convert(::Type{Array}, D::GFortranArrayDescriptor{T,N}) where {T,N} = convert(Array{T,N}, D)
 function Base.convert(::Type{Array{T,N}}, D::GFortranArrayDescriptor{T,N}) where {T,N}
+    D.data == C_NULL && return Array{T,N}(undef, ntuple(_ -> 0, Val(N)))
     @assert(sizeof(T) == D.dtype.elem_len && N == D.dtype.rank)
     @assert(isone(D.dim[end].stride) &&
         all(i -> D.dim[i].stride == D.dim[i+1].stride * (D.dim[i+1].upper_bound - D.dim[i+1].lower_bound +1), 1:N-1))
     # We only do an imperfect translation, as our arrays will always start at 1
     return unsafe_wrap(Array, D.data, NTuple{N,Int}(d.upper_bound - d.lower_bound + 1 for d in D.dim))
 end
-const GFortranVectorDescriptor{T} = GFortranArrayDescriptor{T,1}
-const GFortranMatrixDescriptor{T} = GFortranArrayDescriptor{T,2}
-const GFortranVectorDescriptorRaw{T} = GFortranArrayDescriptorRaw{T,1}
-const GFortranVectorDescriptorBacked{T} = GFortranArrayDescriptorBacked{T,1}
-const GFortranMatrixDescriptorRaw{T} = GFortranArrayDescriptorRaw{T,2}
-const GFortranMatrixDescriptorBacked{T} = GFortranArrayDescriptorBacked{T,2}
-const GVec{T} = GFortranArrayDescriptorBacked{T,1,Vector{T}}
-const IntGVec = GVec{Cint}
-const DoubleGVec = GVec{Cdouble}
+const FVector{T} = GFortranArrayDescriptor{T,1}
+const FMatrix{T} = GFortranArrayDescriptor{T,2}
 
 Base.size(g::GFortranArrayDescriptor{<:Any,N}) where {N} =
-    ntuple(i -> Int(g.dim[i].upper_bound - g.dim[i].lower_bound +1), Val(N))
+    g.data == C_NULL ? ntuple(_ -> 0, Val(N)) : ntuple(i -> Int(g.dim[i].upper_bound - g.dim[i].lower_bound +1), Val(N))
 # For efficiency reasons, we also use sizeof(T) here instead of g.dtype.elem_len, which should really be the same. This is
 # still not as efficient as a Julia Vector, as we cannot statically infer anything about contiguity.
 @inline @generated function Base.getindex(g::GFortranArrayDescriptor{T,N}, I::Vararg{Int,N}) where {T,N}
@@ -182,6 +175,8 @@ end
         return unsafe_store!(g.data + sizeof(T) * $addr, v)
     end
 end
-Base.axes(g::GFortranArrayDescriptor{<:Any,N}) where {N} = ntuple(i -> g.dim[i].lower_bound:g.dim[i].upper_bound, Val(N))
-Base.strides(g::GFortranArrayDescriptor{<:Any,N}) where {N} = ntuple(i -> Int(g.dim[i].stride))
+Base.axes(g::GFortranArrayDescriptor{<:Any,N}) where {N} =
+    g.data == C_NULL ? ntuple(_ -> 0, Val(N)) : ntuple(i -> g.dim[i].lower_bound:g.dim[i].upper_bound, Val(N))
+Base.strides(g::GFortranArrayDescriptor{<:Any,N}) where {N} =
+    g.data == C_NULL ? ntuple(_ -> 0, Val(N)) : ntuple(i -> Int(g.dim[i].stride))
 #endregion
