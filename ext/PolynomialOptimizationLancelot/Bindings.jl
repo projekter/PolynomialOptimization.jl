@@ -5,6 +5,7 @@ include("./FortranSpecials.jl")
 _desc(::Nothing) = C_NULL
 _desc(x::AbstractArray) = Ref(convert(GFortranArrayDescriptor, x))
 
+#region LANCELOT_simple
 @doc raw"""
     LANCELOT_simple(n, X, MY_FUN; MY_GRAD=missing, MY_HESS=missing, BL=nothing, BU=nothing,
         neq=0, nin=0, CX=nothing, Y=nothing, maxit=1000, gradtol=1e-5, feastol=1e-5,
@@ -243,7 +244,7 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
     nin::Integer=0, CX::Union{<:AbstractVector{Cdouble},Nothing}=nothing, Y::Union{<:AbstractVector{Cdouble},Nothing}=nothing,
     maxit::Integer=1000, gradtol::Real=1e-5, feastol::Real=1e-5, print_level::Integer=1)
     MY_FUN_F = @cfunction($((X, fx, i) -> begin
-        unsafe_store!(fx, i == C_NULL ? MY_FUN(convert(Array, X)) : MY_FUN(convert(Array, X), Int(unsafe_load(i))))
+        unsafe_store!(fx, i == C_NULL ? MY_FUN(X[]) : MY_FUN(X[], Int(unsafe_load(i))))
         return
     end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cdouble}, Ptr{Cint}))
     fx = Ref{Cdouble}(NaN)
@@ -252,9 +253,9 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
     if !ismissing(MY_GRAD)
         MY_GRAD_F = @cfunction($((X, G, i) -> begin
             if i == C_NULL
-                MY_GRAD(convert(Array, G), convert(Array, X))
+                MY_GRAD(G[], X[])
             else
-                MY_GRAD(convert(Array, G), convert(Array, X), Int(unsafe_load(i)))
+                MY_GRAD(G[], X[], Int(unsafe_load(i)))
             end
             return
         end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cint}))
@@ -263,9 +264,9 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
         MY_HESS_F = let n=n
             @cfunction($((X, H, i) -> begin
                 if i == C_NULL
-                    MY_HESS(SPMatrix(n, convert(Array, H)), convert(Array, X))
+                    MY_HESS(SPMatrix(n, H[]), X[])
                 else
-                    MY_HESS(SPMatrix(n, convert(Array, H)), convert(Array, X), unsafe_load(i))
+                    MY_HESS(SPMatrix(n, H[]), X[], unsafe_load(i))
                 end
                 return
             end), Cvoid, (Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ref{GFortranVectorDescriptorRaw{Cdouble}}, Ptr{Cint}))
@@ -303,3 +304,487 @@ function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Ca
     )::Cvoid)
     return fx[], iters[], exit_code[]
 end
+#endregion
+
+#region LANCELOT - full
+include("./Structs.jl")
+
+"""
+    LANCELOT_initialize()
+
+Returns a `(data, control)` tuple to be used in subsequent optimization with [`LANCELOT_solve`](@ref) and to be cleaned up
+using [`LANCELOT_terminate`](@ref).
+"""
+function LANCELOT_initialize()
+    data = LANCELOT_data_type()
+    control = LANCELOT_control_type()
+    @ccall libgalahad_double.__lancelot_double_MOD_lancelot_initialize(
+        data::LANCELOT_data_type,      # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+        control::LANCELOT_control_type # TYPE ( LANCELOT_control_type ), INTENT( OUT ) :: control
+    )::Cvoid
+    return data, control
+end
+
+@doc raw"""
+    LANCELOT_solve(prob; RANGE[, GVALS][, FT][, XT][, FUVALS][, ICALCF][, ICALCG][, IVAR][, Q][,
+        DGRAD,] control, inform, data[, ELDERS][, ELFUN][, ELFUN_flexible][, GROUP])
+
+- `prob` is a [`LANCELOT_problem_type`](@ref). It is used to hold data about the problem being solved. Components `IELING`,
+  `ISTADG`, `IELVAR`, `ISTAEV`, `ICNA`, `ISTADA`, `A`, `B`, `BL`, `BU`, `GSCALE`, `ESCALE`, `VSCALE`, `GXEQX`, `INTREP`,
+  `VNAMES`, and `GNAMES` must all be set on entry, and will thereafter be unaltered.
+
+  The component `INTVAR` must also be set, but will subsequently be reset by `LANCELOT_solve` so that its ``i``-th value gives
+  the position in the array `FUVALS` of the first component of the gradient of the ``i``-th nonlinear element function, with
+  respect to its internal variables (see `FUVALS`). The component ``X`` must also be set, but will be altered by
+  `LANCELOT_solve`. The component `ISTADH` need not be set on initial entry, but will be set by `LANCELOT_solve`.
+
+  If the dummy argument `ELFUN` (see below) is present, the components `ISTEPA` and `EPVALU` must also be set on entry—they
+  will not subsequently be altered—but otherwise they need not be set. Likewise if the dummy argument `GROUP` (see below) is
+  present, the components `ISTGPA`, `GPVALU` and `ITYPEG` must also be set on entry—they will not subsequently be altered—but
+  otherwise they need not be set.
+
+  If the problem involves general constraints, the components `KNDOFG`, `Y` and `C` must be set, and the first two assigned
+  values—`KNDOFG` will not subsequently be altered, while `C` will be set by `LANCELOT_solve`.
+  If the problem does not involve general constraints, `KNDOFG`, `Y` and `C` need not be set.
+- `RANGE` is a user-supplied subroutine whose purpose is to define the linear transformation of variables for those non-linear
+  elements which have different elemental and internal variables. See below for details.
+- `GVALS::AbstractMatrix{Cdouble}` is a matrix of shape `(prob.ng, 3)` that is used to store function and derivative
+  information for the group functions. The user may be asked to provide values for these functions and/or derivatives,
+  evaluated at the argument `FT` when control is returned to the calling program with a negative value of the variable
+  `inform.status`. This information needs to be stored by the user in specified locations within `GVALS`. Details of the
+  required information are given in Section 2.4.7 of the manual.
+- `FT::AbstractVector{Cdouble}` is a vector of dimension `prob.ng` that is set within `LANCELOT_solve` to a trial value of the
+  argument of the ``i``-th group function at which the user may be required to evaluate the values and/or derivatives of that
+  function. Precisely what group function information is required at ``FT`` is under the control of the variable
+  `inform.status` and details are given in Section 2.4.7 of the manual.
+- `XT::AbstractVector{Cdouble}` is a vector of dimension `prob.n` that is set within `LANCELOT_solve` to a trial value of the
+  variables `\vec x` at which the user may be required to evaluate the values and/or derivatives of the nonlinear elements
+  functions. Precisely what element function information is required at `XT` is under the control of the variable
+  `inform.status` and details are given in Section 2.4.7 of the manual.
+- `FUVALS::AbstractVector{Cdouble}` is a vector that is used to store function and derivative information for the nonlinear
+  element functions. The user is asked to provide values for these functions and/or derivatives, evaluated at the arguments
+  `XT`, at specified locations within `FUVALS`, when control is returned to the calling program with a negative value of the
+  variable `inform.status`. Alternatively, the user may have provided a suitable subroutine `ELFUN` to compute the required
+  function or derivative values (see below). Details of the required information are given in Sections 2.4.4 and 2.4.7 of the
+  manual.
+
+  The first segment of `FUVALS` contains the values of the nonlinear element functions; the next two segments contain their
+  gradients and Hessian matrices, taken with respect to their internal variables. The remaining two used segments contain the
+  gradient of the objective function and the diagonal elements of the second derivative approximation, respectively. At the
+  solution, the components of the gradient of the augmented Lagrangian function corresponding to variables which lie on one of
+  their bounds are of particular interest in many applications areas. In particular they are often called shadow prices, and
+  are used to assess the sensitivity of the solution to variations in the bounds on the variables.
+
+  The required length of `FUVALS` may be calculated using the following code segment:
+  ```julia
+    prob.nel + 2prob.n + sum(i -> i * (i +3) ÷ 2, Iterators.take(prob.INTVAR, prob.nel))
+  ```
+- `ICALCF::AbstractVector{Cint}` is a vector of dimension `prob.nel`. If the user has chosen not to perform internal element
+  evaluations, and if the value of `inform.status` on return from `LANCELOT_solve` indicates that further element functions
+  values or their derivatives are required prior to a reentry, the first `inform.ncalcf` components of `ICALCF` give the
+  indices of the group functions which need to be recalculated at `XT`. Precisely what group function information is required
+  is under the control of the variable `inform.status` and details are given in Section 2.4.7 of the manual.
+- `ICALCG::AbstractVector{Cint}` is a vector of dimension `prob.ng`. If the user has chosen not to perform internal group
+  evaluations, and if the value of `inform.status` on return from `LANCELOT_solve` indicates that further group functions
+  values or their derivatives are required prior to a re-entry, the first `inform.ncalcg` components of `ICALCG` give the
+  indices of the group functions which need to be recalculated at `FT`. Precisely what group function information is required
+  is under the control of the variable `inform.status` and details are given in Section 2.4.7 of the manual.
+- `IVAR::AbstractVector{Cint}` in a vector of dimension `prob.n` that is required when the user is providing a special
+  preconditioner for the conjugate gradient inner iteration.
+- `Q` and `DGRAD` are `AbstractVector{Cdouble}`s of dimension `prob.n` that are required when the user is providing a special
+  preconditioner for the conjugate gradient inner iteration.
+- `control` is a [`LANCELOT_control_type`](@ref). On exit, `control` contains default values for the components. These values
+  should only be changed after calling [`LANCELOT_initialize`](@ref).
+- `inform` is a [`LANCELOT_inform_type`](@ref). The component status must be set to `0` on initial entry, and a successful call
+  to `LANCELOT_solve` is indicated when the component status has the value `0`. For other return values of status, see Sections
+  2.4.7 and 2.5 of the manual.
+- `data` is a [`LANCELOT_data_type`](@ref). It is used to hold data about the problem being solved. It must not have been
+  altered by the user since the last call to [`LANCELOT_initialize`](@ref).
+- `ELDERS::AbstractMatrix{Cint}` is an optional matrix argument of shape `(2, prob.nel)` that may be used to specify what kind
+  of first- and second-derivative approximations will be required for each nonlinear element function. If `ELDERS` is not
+  present, the first- and second-derivative requirements for every element will be as specified by the variables
+  `control.first` derivatives and `control.second` derivatives respectively. For finer control, if `ELDERS` is present, and the
+  user is able to provide analytical first derivatives for the ``i``-th nonlinear element function, `ELDERS[1, i]` must be set
+  to to be non-positive. If analytical first derivatives are unavailable, they may be estimated by forward differences by
+  setting `ELDERS[1, i] = 1` or, more accurately but at additional expense, by central differences by setting
+  `ELDERS[1, i] ≥ 2`. Similarly, if `ELDERS` is present, and the user is able to provide analytical second derivatives for the
+  ``i``-th nonlinear element function, `ELDERS[2, i]` must be set to to be non-positive. If the user is unable to provide
+  second derivatives, these derivatives will be approximated using one of four secant approximation formulae. If `ELDERS[2, i]`
+  is set to `1`, the BFGS formula is used; if it is set to `2`, the DFP formula is used; if it is set to `3`, the PSB formula
+  is used; and if it is set to `4` or larger, the symmetric rank-one formula is used. The user is strongly advised to use
+  analytic first and second derivatives if at all possible as this often significantly improves the convergence of the method.
+- `ELFUN` and `ELFUN_flexible` are optional user-supplied functions whose purpose is to evaluate the values and derivatives of
+  the nonlinear element functions. See Section 2.4.1 of the manual for background information and below for details. Only one
+  of `ELFUN` and `ELFUN_flexible` may be present at once. Which of the two arguments is permitted depends on whether `ELDERS`
+  (see above) is present. `ELFUN_flexible` is only permitted when `ELDERS` is present, since `ELFUN_flexible` allows the user
+  to provide element-specific levels of derivative information. In the absence of `ELDERS`, `ELFUN` should be used instead of
+  `ELFUN_flexible`. If both `ELFUN` and `ELFUN_flexible` are absent, `LANCELOT_solve` will use reverse communication to obtain
+  element function values and derivatives.
+- `GROUP` is an optional user-supplied subroutine whose purpose is to evaluate the values and derivatives of the group
+  functions. See Section 2.4.1 of the manual for background information and below for details. If `GROUP` is absent,
+  `LANCELOT_solve` will use reverse communication to obtain group function values and derivatives. `GROUP` need not be present
+  if all components of `prob.GXEQX` are `true`.
+
+# Callback arguments
+## `RANGE(ielemn, transp, W1, W2, nelvar, ninvar, ieltyp)`
+The purpose of the `RANGE` callback is to define the transformation between internal and elemental variables for nonlinear
+elements with useful internal representations.
+- `ielemn::Int` gives the index of the nonlinear element whose transformation is required by `LANCELOT_solve`.
+- `transp::Bool`. If `transp` is `false`, the callback must put the result of the transformation ``W \vec v`` in the array
+  `W2`, where ``\vec v`` is input in the array `W1`. Otherwise, the callback must supply the result of the transposed
+  transformation ``W^\top \vec u`` in the array `W2`, where ``\vec u`` is input in the array `W1`.
+- `W1::Vector{Cdouble}` is a vector whose dimension is the number of elemental variables if `transp` is `false` and the number
+  of internal variables otherwise.
+- `W2::Vector{Cdouble}` is a vector whose dimension is the number of internal variables if `transp` is `false` and the number
+  of elemental variables otherwise. The result of the transformation of `W1` or its transpose, as defined by `transp`, must be
+  set in `W2`.
+- `nelvar::Int` gives the number of elemental variables for the element specified by `ielemn`.
+- `ninvar::Int` gives the number of internal variables for the element specified by `ielemn`.
+- `ieltyp::Int` defines the type for the element specified by `ielemn`.
+
+Restriction: `length(W1) ≥ ninvar` if `transp` is `true` and `length(W1) ≥ nelvar` if transp is `false`.
+Restriction: `length(W2) ≥ nelvar` if `transp` is `true` and `length(W2) ≥ ninvar` if transp is `false`.
+
+The user will already have specified which elements have useful transformations in the array `INTREP`. `RANGE` will only be
+called for elements for which the corresponding component of `INTREP` is `true`.
+
+## `ELFUN(FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV, IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ifflag) -> Integer`
+If the argument `ELFUN` is present when calling `LANCELOT_solve`, the user is expected to provide a callback to evaluate
+function or derivative values (with respect to internal variables) of (a given subset of) the element functions.
+- `FUVALS::Vector{Cdouble}` is used to store function and derivative information for the nonlinear element functions. The
+  callback is asked to provide values for these functions and/or derivatives, evaluated at the argument `XVALUE`, at specified
+  locations within `FUVALS`.
+
+  The first segment of `FUVALS` is used to hold the values of the nonlinear element functions, component ``i`` holding the
+  value of the ``i``-th element function. The second segment holds the components of the gradients of the element functions
+  taken with respect to their internal variables, as described by `INTVAR` below. The final segment contains the elements'
+  Hessian matrices, again taken with respect to their internal variables, as described by `ISTADH` below.
+- `XVALUE::Vector{Cdouble}` contains the values of ``x`` at which the callback is required to evaluate the values or
+  derivatives of the nonlinear elements functions.
+- `EPVALU::Vector{Cdouble}` contains the values of the element parameters ``\var p^e_i``, ``i = 1, \dots, n_e``. The indices
+  for the parameters for element ``i`` immediately precede those for element ``i + 1``, and each element's parameters appear in
+  a contiguous list.
+- `ncalcf::Int` specifies how many of the nonlinear element functions or their derivatives are to be evaluated.
+- `ITYPEE::Vector{Cint}`'s ``i``-th component specifies the type of element ``i``.
+- `ISTAEV::Vector{Cint}`: see [`LANCELOT_problem_type`](@ref)
+- `IELVAR::Vector{Cint}`: see [`LANCELOT_problem_type`](@ref)
+- `INTVAR::Vector{Cint}`'s ``i``-th component (``1 \leq i \leq n_e``) gives the position in the array `FUVALS` of the first
+  component of the gradient of the ``i``-th nonlinear element function, with respect to its internal variables.
+- `ISTADH::Vector{Cint}`'s ``i``-th component (``1 \leq i \leq n_e``) gives the position in the array `FUVALS` of the first
+  component of the Hessian matrix of the ``i``-th nonlinear element function ``e_i``, with respect to its internal variables.
+  Only the upper triangular part of each Hessian matrix is stored and the storage is by columns. That is to say that the
+  component of the Hessian of the ``k``-th nonlinear element with respect to internal variables ``i`` and ``j``, ``i \leq j``,
+  ``\frac{\partial^2 e_k}{\partial u_i\partial u_j}`` must be placed in `FUVALS[ISTADH[k]+(j(j-1)÷2)+i-1]`. The element
+  `ISTADH[ne + 1]` is space required to finish storing the Hessian of the last nonlinear element in `FUVALS` plus one.
+- `ISTEPA::Vector{Cint}`'s ``i``-th component gives the position in `EPVALU` of the first parameter for element function ``i``.
+  In addition, `ISTEPA[ne+1]` is the position in `EPVALU` of the last parameter for element function ``n_e`` plus one.
+- `ICALCF::Vector{Cint}`'s first `ncalcf` components gives the indices of the nonlinear element functions whose values or
+  derivatives are to be evaluated.
+- `ifflag::Int` defines whether it is the values of the element functions that are required (`ifflag = 1`) or if it is the
+  derivatives (`ifflag > 1`). Possible values and their requirements are:
+  - `ifflag = 1`. The values of nonlinear element functions `ICALCF[i]`, `i = 1, ..., ncalcf`, are to be computed and placed in
+    `FUVALS[ICALCF[i]]`.
+  - `ifflag = 2`. The gradients of nonlinear element functions `ICALCF[i]`, `i = 1, ..., ncalcf`, are to be computed. The
+    gradient of the `ICALCF[i]`-th element is to be placed in the segment of `FUVALS` starting at `INTVAR[ICALCF[i]]`.
+  - `ifflag = 3`. The gradients and Hessians of nonlinear element functions `ICALCF[i]`, `i = 1, ..., ncalcf`, are to be
+    computed. The gradient of the `ICALCF[i]`-th element is to be placed in the segment of `FUVALS` starting at
+    `INTVAR[ICALCF[i]]`. The Hessian of this element should be placed in the segment of `FUVALS` starting at
+    `ISTADH[ICALCF[i]]`.
+  *N.B.* If the user intends to use approximate second derivatives (`control.second_derivatives > 0`), `LANCELOT_solve` will
+  never call `ELFUN` with `ifflag = 3`, so the user need not provide Hessian values. Furthermore, if the user intends to use
+  approximate first derivatives (`control.first_derivatives > 0`), `LANCELOT_solve` will never call `ELFUN` with `ifflag = 2`
+  or `3`, so the user need then not provide gradient or Hessian values.
+
+Restrictions: `length(ITYPEE) ≥ prob.nel`, `length(ISTAEV) ≥ prob.nel +1`, `length(IELVAR) ≥ ISTAEV[end] -1`,
+`length(INTVAR) ≥ prob.nel +1`, `length(ISTADH) ≥ prob.nel +1`, `length(ISTEPA) ≥ prob.nel +1`, `length(ICALCF) ≥ ncalcf`,
+`length(FUVALS) ≥ ISTADH[end] -1`, `length(XVALUE) ≥ prob.n`, and `length(EPVALU) ≥ ISTEPA(prob.nel +1) -1`.
+
+Return value: The return value should be set to `0` if all of the required values have been found, and to any nonzero value if,
+for any reason, one or more of the required values could not be determined. For instance, if the value of a nonlinear element
+(or its derivative) was required outside of its domain of definition, a nonzero value should be returned.
+
+## `ELFUN_FLEXIBLE(FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV, IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ifflag, ELDERS) -> Integer`
+If the argument `ELFUN_flexible` is present when calling `LANCELOT_solve`, the user is expected to provide a callback to
+evaluate function or derivative values (with respect to internal variables) of (a given subset of) the element functions.
+- see `ELFUN` for all parameters not documented in the following
+- `ifflag::Int` defines whether it is the values of the element functions that are required (`ifflag = 1`) or if it is the
+  derivatives (`ifflag > 1`).
+  - If `ifflag = 1`, the values of nonlinear element functions `ICALCF[i]`, `i = 1, ..., ncalcf`, are to be computed and placed
+    in `FUVALS[ICALCF[i]]`.
+  - If `ifflag > 1`, those derivative values specified by ELDERS (see below) are required.
+- `ELDERS::Matrix{Cint}` of shape `(2, ?)` specifies what first- and second-derivative information (if any) is required for
+  each nonlinear element function when `ifflag > 1`. Specifically, in this case, the gradient of each nonlinear element
+  function `ICALCF[i]`, `i = 1, ..., ncalcf`, for which `ELDERS[1, ICALCF[i]] ≤ 0` should be computed. The gradient of the
+  `ICALCF[i]`-th element is to be placed in the segment of `FUVALS` starting at `INTVAR[ICALCF[i]]`. Furthermore, if
+  additionally `ELDERS[2,ICALCF[i]] ≤ 0`, the Hessian of the nonlinear element function `ICALCF[i]` should be computed and
+  placed in the segment of `FUVALS` starting at `ISTADH[ICALCF[i]]`.
+
+Restriction: `size(ELDERS, 2) ≥ prob.nel`.
+
+## `GROUP(GVALUE, FVALUE, GPVALU, ncalcg, ITYPEG, ISTGPA, ICALCG, derivs) -> Integer`
+If the argument `GROUP` is present when calling `LANCELOT_solve`, the user is expected to provide a callback to evaluate
+function or derivative values of (a given subset of) the group functions.
+- `GVALUE::Matrix{Cdouble}` of shape `(?, 3)`. The value and first and second derivative of the ``i``-th group function are
+  held in `GVALUE[i, 1]`, `GVALUE[i, 2]` and `GVALUE[i, 3]` respectively.
+- `FVALUE::Vector{Cdouble}`'s ``i``-th component contains the value of group variable at which the subroutine is required to
+  evaluate the value or derivatives of the ``i``-th group function.
+- `GPVALU::Vector{Cdouble}` contains the values of the group parameters ``\vec p^g_i``, ``i = 1, \dots, n_g``. The indices for
+  the parameters for group ``i`` immediately precede those for group ``i + 1``, and each group's parameters appear in a
+  contiguous list.
+- `ncalcg::Int` specifies how many of the group functions or their derivatives are to be evaluated.
+- `ITYPEG::Vector{Cint}`'s ``i``-th component specifies the type of group ``i``.
+- `ISTGPA::Vector{Cint}`'s ``i``-th component gives the position in `GPVALU` of the first parameter for group function ``i``.
+  In addition, `ISTGPA[ng+1]` is the position in `GPVALU` of the last parameter for element function ``n_g`` plus one.
+- `ICALCG::Vector{Cint}`'s first `ncalcg` components gives the indices of the nonlinear group functions whose values or
+  derivatives are to be evaluated.
+- `derivs::Bool`. When `derivs` is `false`, the callback must return the values of group functions `ICALCG[i]`,
+  `i = 1, ..., ncalcg` in `GVALUE[ICALCF[i], 1]`. When `derivs` is `true`, the callback must return the first and second
+  derivatives of group functions `ICALCG[i]`, `i = 1, ..., ncalcg` in `GVALUE[ICALCF[i], 2]` and `GVALUE[ICALCF[i], 3]`
+  respectively.
+
+Restrictions: `size(GVALUE, 2) ≥ prob.ng`, `length(ITYPEG) ≥ prob.n`, `length(ISTGPA) ≥ prob.ng +1`, `length(ICALCG) ≥ ncalcg`,
+`length(FVALUE) ≥ prob.ng`, and `length(GPVALU) ≥ ISTGPA[end] -1`.
+
+Return value: The return value should be set to `0` if all of the required values have been found, and to any nonzero value if,
+for any reason, one or more of the required values could not be determined. For instance, if the value of a group function (or
+its derivative) was required outside of its domain of definition, a nonzero value should be returned.
+"""
+function LANCELOT_solve(prob::LANCELOT_problem_type; RANGE::Base.Callable,
+    GVALS::AbstractMatrix{Cdouble}=Matrix{Cdouble}(undef, prob.ng, 3),
+    FT::AbstractVector{Cdouble}=Vector{Cdouble}(undef, prob.ng),
+    XT::AbstractVector{Cdouble}=Vector{Cdouble}(undef, prob.n),
+    FUVALS::AbstractVector{Cdouble}=Vector{Cdouble}(undef, prob.nel + 2prob.n +
+                                                    sum(i -> i * (i +3) ÷ 2, Iterators.take(prob.INTVAR, prob.nel), init=0)),
+    ICALCF::AbstractVector{Cint}=Vector{Cint}(undef, prob.nel),
+    ICALCG::AbstractVector{Cint}=Vector{Cint}(undef, prob.ng),
+    IVAR::AbstractVector{Cint}=Vector{Cint}(undef, prob.n),
+    Q::AbstractVector{Cdouble}=Vector{Cdouble}(undef, prob.n),
+    DGRAD::AbstractVector{Cdouble}=Vector{Cdouble}(undef, prob.n),
+    control::LANCELOT_control_type, inform::LANCELOT_inform_type, data::LANCELOT_data_type,
+    ELFUN::Union{Base.Callable,Missing}=missing, GROUP::Union{Base.Callable,Missing}=missing,
+    ELFUN_FLEXIBLE::Union{Base.Callable,Missing}=missing, ELDERS::Union{<:AbstractVector{Cint},Missing}=missing)
+    LinearAlgebra.chkstride1(GVALS)
+    LinearAlgebra.chkstride1(FT)
+    LinearAlgebra.chkstride1(XT)
+    LinearAlgebra.chkstride1(FUVALS)
+    LinearAlgebra.chkstride1(ICALCF)
+    LinearAlgebra.chkstride1(DGRAD)
+    ismissing(ELDERS) || LinearAlgebra.chkstride1(ELDERS)
+    ((ismissing(ELFUN) || ismissing(ELDERS)) &&
+        (ismissing(ELFUN_FLEXIBLE) || !ismissing(ELDERS))) ||
+        throw(ArgumentError("Wrong combination of ELDERS, ELFUN, and ELFUN_FLEXIBLE"))
+    ismissing(ELDERS) && ismissing(ELFUN_FLEXIBLE)
+    if size(GVALS) != (prob.ng, 3) || length(FT) != prob.ng || length(XT) != prob.n || length(ICALCF) != prob.nel ||
+        length(ICALCG) != prob.ng || length(IVAR) != prob.n || length(Q) != prob.n || length(DGRAD) != prob.n ||
+        (!ismissing(ELDERS) && size(ELDERS) != (2, prob.nel))
+        throw(ArgumentError("Invalid dimensions"))
+    end
+    #=
+        SUBROUTINE RANGE ( ielemn, transp, W1, W2, nelvar, ninvar, ieltyp, lw1, lw2 )
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ielemn, nelvar, ninvar, ieltyp
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lw1, lw2
+            LOGICAL, INTENT( IN ) :: transp
+            REAL ( KIND = rp_ ), INTENT( IN ), DIMENSION( lw1 ) :: W1
+            REAL ( KIND = rp_ ), DIMENSION( lw2 ) :: W2
+        END SUBROUTINE RANGE
+    =#
+    RANGE_F = @cfunction($((ielemn, transp, W1, W2, nelvar, ninvar, ieltyp, lw1, lw2) -> begin
+        println("In RANGE")
+        flush(stdout)
+        RANGE(
+            Int(unsafe_load(ielemn)),
+            !iszero(unsafe_load(transp)),
+            unsafe_wrap(Array, W1, unsafe_load(lw1)),
+            unsafe_wrap(Array, W2, unsafe_load(lw2)),
+            Int(unsafe_load(nelvar)),
+            Int(unsafe_load(ninvar)),
+            Int(unsafe_load(ieltyp))
+        )
+        return
+    end), Cvoid, (Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}))
+    #=
+        SUBROUTINE ELFUN ( FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV,      &
+                           IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ltypee,      &
+                           lstaev, lelvar, lntvar, lstadh, lstepa, lcalcf,      &
+                           lfuval, lxvalu, lepvlu, ifflag, ifstat )
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ncalcf, ifflag, ltypee, lstaev
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lelvar, lntvar, lstadh, lstepa
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lcalcf, lfuval, lxvalu, lepvlu
+            INTEGER ( KIND = ip_ ), INTENT( OUT ) :: ifstat
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ITYPEE(ltypee), ISTAEV(lstaev)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: IELVAR(lelvar), INTVAR(lntvar)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ISTADH(lstadh), ISTEPA(lstepa)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ICALCF(lcalcf)
+            REAL ( KIND = rp_ ), INTENT( IN ) :: XVALUE(lxvalu)
+            REAL ( KIND = rp_ ), INTENT( IN ) :: EPVALU(lepvlu)
+            REAL ( KIND = rp_ ), INTENT( INOUT ) :: FUVALS(lfuval)
+       END SUBROUTINE ELFUN
+    =#
+    if !ismissing(ELFUN)
+        ELFUN_F = @cfunction(
+            $((FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV, IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ltypee, lstaev, lelvar,
+               lntvar, lstadh, lstepa, lcalcf, lfuval, lxvalu, lepvlu, ifflag, ifstat) -> begin
+                println("in ELFUN")
+                flush(stdout)
+                unsafe_store!(ifstat,
+                    ELFUN(
+                        unsafe_wrap(Array, FUVALS, unsafe_load(lfuval)),
+                        unsafe_wrap(Array, XVALUE, unsafe_load(lxvalu)),
+                        unsafe_wrap(Array, EPVALU, unsafe_load(lepvlu)),
+                        Int(unsafe_load(ncalcf)),
+                        unsafe_wrap(Array, ITYPEE, unsafe_load(ltypee)),
+                        unsafe_wrap(Array, ISTAEV, unsafe_load(lstaev)),
+                        unsafe_wrap(Array, IELVAR, unsafe_load(lelvar)),
+                        unsafe_wrap(Array, INTVAR, unsafe_load(lntvar)),
+                        unsafe_wrap(Array, ISTADH, unsafe_load(lstadh)),
+                        unsafe_wrap(Array, ISTEPA, unsafe_load(lstepa)),
+                        unsafe_wrap(Array, ICALCF, unsafe_load(lcalcf)),
+                        unsafe_load(ifflag)
+                    )
+                )
+                return
+            end), Cvoid,
+            (Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
+        )
+    end
+    #=
+        SUBROUTINE GROUP ( GVALUE, lgvalu, FVALUE, GPVALU, ncalcg,              &
+                           ITYPEG, ISTGPA, ICALCG, ltypeg, lstgpa,              &
+                           lcalcg, lfvalu, lgpvlu, derivs, igstat )
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lgvalu, ncalcg, ltypeg, lstgpa
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lcalcg, lfvalu, lgpvlu
+            INTEGER ( KIND = ip_ ), INTENT( OUT ) :: igstat
+            LOGICAL, INTENT( IN ) :: derivs
+            INTEGER ( KIND = ip_ ), INTENT( IN ), DIMENSION( ltypeg ) :: ITYPEG
+            INTEGER ( KIND = ip_ ), INTENT( IN ), DIMENSION( lstgpa ) :: ISTGPA
+            INTEGER ( KIND = ip_ ), INTENT( IN ), DIMENSION( lcalcg ) :: ICALCG
+            REAL ( KIND = rp_ ), INTENT( IN ), DIMENSION( lfvalu ) :: FVALUE
+            REAL ( KIND = rp_ ), INTENT( IN ), DIMENSION( lgpvlu ) :: GPVALU
+            REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( lgvalu, 3 ) :: GVALUE
+        END SUBROUTINE GROUP
+    =#
+    if !ismissing(GROUP)
+        GROUP_F = @cfunction(
+            $((GVALUE, lgvalu, FVALUE, GPVALU, ncalcg, ITYPEG, ISTGPA, ICALCG, ltypeg, lstgpa, lcalcg, lfvalu, lgpvlu, derivs,
+               igstat) -> begin
+                println("In GROUP")
+                flush(stdout)
+                unsafe_store!(igstat,
+                    GROUP(
+                        unsafe_wrap(Array, GVALUE, (unsafe_load(lgvalu), 3)),
+                        unsafe_wrap(Array, FVALUE, unsafe_load(lfvalu)),
+                        unsafe_wrap(Array, GPVALU, unsafe_load(lgpvlu)),
+                        Int(unsafe_load(ncalcg)),
+                        unsafe_wrap(Array, ITYPEG, unsafe_load(ltypeg)),
+                        unsafe_wrap(Array, ISTGPA, unsafe_load(lstgpa)),
+                        unsafe_wrap(Array, ICALCG, unsafe_load(lcalcg)),
+                        !iszero(unsafe_load(derivs))
+                    )
+                )
+                return
+            end), Cvoid,
+            (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
+        )
+    end
+    #=
+        SUBROUTINE ELFUN_flexible ( FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV,      &
+                                    IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ltypee,      &
+                                    lstaev, lelvar, lntvar, lstadh, lstepa, lcalcf,      &
+                                    lfuval, lxvalu, lepvlu, llders, ifflag, ELDERS,      &
+                                    ifstat )
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ncalcf, ifflag, ltypee, lstaev
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lelvar, lntvar, lstadh, lstepa
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: lcalcf, lfuval, lxvalu, lepvlu
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: llders
+            INTEGER ( KIND = ip_ ), INTENT( OUT ) :: ifstat
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ITYPEE(ltypee), ISTAEV(lstaev)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: IELVAR(lelvar), INTVAR(lntvar)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ISTADH(lstadh), ISTEPA(lstepa)
+            INTEGER ( KIND = ip_ ), INTENT( IN ) :: ICALCF(lcalcf), ELDERS(2,llders)
+            REAL ( KIND = rp_ ), INTENT( IN ) :: XVALUE(lxvalu)
+            REAL ( KIND = rp_ ), INTENT( IN ) :: EPVALU(lepvlu)
+            REAL ( KIND = rp_ ), INTENT( INOUT ) :: FUVALS(lfuval)
+        END SUBROUTINE ELFUN_flexible
+    =#
+    if !ismissing(ELFUN_FLEXIBLE)
+        ELFUN_FLEXIBLE_F = @cfunction(
+            $((FUVALS, XVALUE, EPVALU, ncalcf, ITYPEE, ISTAEV, IELVAR, INTVAR, ISTADH, ISTEPA, ICALCF, ltypee, lstaev, lelvar,
+               lntvar, lstadh, lstepa, lcalcf, lfuval, lxvalu, lepvlu, llders, ifflag, ELDERS, ifstat) -> begin
+                println("in ELFUN_FLEXIBLE")
+                flush(stdout)
+                unsafe_store!(ifstat,
+                    ELFUN(
+                        unsafe_wrap(Array, FUVALS, unsafe_load(lfuval)),
+                        unsafe_wrap(Array, XVALUE, unsafe_load(lxvalu)),
+                        unsafe_wrap(Array, EPVALU, unsafe_load(lepvlu)),
+                        Int(unsafe_load(ncalcf)),
+                        unsafe_wrap(Array, ITYPEE, unsafe_load(ltypee)),
+                        unsafe_wrap(Array, ISTAEV, unsafe_load(lstaev)),
+                        unsafe_wrap(Array, IELVAR, unsafe_load(lelvar)),
+                        unsafe_wrap(Array, INTVAR, unsafe_load(lntvar)),
+                        unsafe_wrap(Array, ISTADH, unsafe_load(lstadh)),
+                        unsafe_wrap(Array, ISTEPA, unsafe_load(lstepa)),
+                        unsafe_wrap(Array, ICALCF, unsafe_load(lcalcf)),
+                        unsafe_load(ifflag),
+                        unsafe_wrap(Array, ELDERS, (2, unsafe_load(llders)))
+                    )
+                )
+                return
+            end), Cvoid,
+            (Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+             Ptr{Cint})
+        )
+    end
+    GC.@preserve ELDERS begin
+        @ccall libgalahad_double.__lancelot_double_MOD_lancelot_solve(
+            prob::LANCELOT_problem_type,    # TYPE ( LANCELOT_problem_type ), INTENT( INOUT ), TARGET :: prob
+            RANGE_F::Ptr{Cvoid},
+            GVALS::Ref{Cdouble},            # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%ng, 3 ) :: GVALS
+            FT::Ref{Cdouble},               # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%ng ) :: FT
+            XT::Ref{Cdouble},               # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%n ) :: XT
+            FUVALS::Ref{Cdouble},           # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( lfuval ) :: FUVALS
+            length(FUVALS)::Ref{Cint},      # INTEGER ( KIND = ip_ ), INTENT( IN ) :: lfuval
+            ICALCF::Ref{Cint},              # INTEGER ( KIND = ip_ ), INTENT( INOUT ), DIMENSION( prob%nel ) :: ICALCF
+            ICALCG::Ref{Cint},              # INTEGER ( KIND = ip_ ), INTENT( INOUT ), DIMENSION( prob%ng ) :: ICALCG
+            IVAR::Ref{Cint},                # INTEGER ( KIND = ip_ ), INTENT( INOUT ), DIMENSION( prob%n  ) :: IVAR
+            Q::Ref{Cdouble},                # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%n ) :: Q
+            DGRAD::Ref{Cdouble},            # REAL ( KIND = rp_ ), INTENT( INOUT ), DIMENSION( prob%n ) :: DGRAD
+            control::LANCELOT_control_type, # TYPE ( LANCELOT_control_type ), INTENT( INOUT ) :: control
+            inform::LANCELOT_inform_type,   # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
+            data::LANCELOT_data_type,       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+            (ismissing(ELFUN) ? C_NULL : ELFUN_F)::Ptr{Cvoid},
+            (ismissing(GROUP) ? C_NULL : GROUP_F)::Ptr{Cvoid},
+            (ismissing(ELFUN_FLEXIBLE) ? C_NULL : ELFUN_FLEXIBLE_F)::Ptr{Cvoid},
+            (ismissing(ELDERS) ? Ptr{Cint}(C_NULL) : ELDERS)::Ptr{Cint}
+                                        # INTEGER ( KIND = ip_ ), INTENT( INOUT ), OPTIONAL, DIMENSION( 2, prob%nel ) :: ELDERS
+        )::Cvoid
+    end
+end
+
+"""
+    LANCELOT_terminate(data, control, inform)
+
+All previously allocated arrays are deallocated with this function.
+- `data::LANCELOT_data_type` exactly as for [`LANCELOT_solve`](@ref) that must not have been altered by the user since the
+  last call to [`LANCELOT_initialize`](@ref).
+- `control::LANCELOT_control_type`
+- `inform::LANCELOT_inform_type`. Only the components `status`, `alloc_status` and `bad_alloc` might have been altered on exit,
+  and a successful call to [`LANCELOT_terminate`](@ref) is indicated when this component `status` has the value `0`. For other
+  return values of `status`, see Section 2.5 of the manual.
+"""
+function LANCELOT_terminate(data::LANCELOT_data_type, control::LANCELOT_control_type, inform::LANCELOT_inform_type)
+    @ccall libgalahad_double.__lancelot_double_MOD_lancelot_terminate(
+        data::LANCELOT_data_type,       # TYPE ( LANCELOT_data_type ), INTENT( INOUT ) :: data
+        control::LANCELOT_control_type, # TYPE ( LANCELOT_control_type ), INTENT( IN ) :: control
+        inform::LANCELOT_inform_type    # TYPE ( LANCELOT_inform_type ), INTENT( INOUT ) :: inform
+    )::Cvoid
+end
+#endregion
