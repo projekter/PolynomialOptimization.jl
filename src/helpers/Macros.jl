@@ -73,3 +73,35 @@ macro capture(firstarg, secondarg=nothing)
         end
     end
 end
+
+accumulate_vars!(v::Vector{Symbol}, e::Symbol) = push!(v, e)
+function accumulate_vars!(v::Vector{Symbol}, e::Expr)
+    e.head === :tuple || error("Variable assignments must be nested in a tuple-like syntax")
+    for x in e.args
+        accumulate_vars!(v, x)
+    end
+    return v
+end
+
+macro unroll(loop)
+    loop.head === :for || error("@unroll requires a for loop")
+    length(loop.args) == 2 || error("@unroll requires a simple for loop")
+    vars, body = loop.args
+    (vars.head === :(=) && length(vars.args) == 2) || error("Invalid for syntax")
+    varnames, varvalues = vars.args
+    (varvalues isa Expr && varvalues.head === :tuple) || error("@unroll requires tuple values")
+    result = Expr(:block)
+    sizehint!(result.args, length(varvalues.args))
+    if varnames isa Symbol
+        for varvalue in varvalues.args
+            push!(result.args, :(let $varnames=$varvalue; $body end))
+        end
+    else
+        allnames = Symbol[]
+        accumulate_vars!(allnames, varnames)
+        for varvalue in varvalues.args
+            push!(result.args, :(let $(allnames...); $varnames = $varvalue; $body end))
+        end
+    end
+    esc(result)
+end

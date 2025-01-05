@@ -15,11 +15,13 @@ This function returns an iterator.
 
 See also [`poly_optimize`](@ref).
 """
-function poly_solutions(::Val{:mvhankel}, result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000);
-    verbose::Bool=false) where {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}
+poly_solutions(::Val{:mvhankel}, result::Result{Rx,V}, ϵ::R=R(1 // 1_000_000), δ::R=R(1 // 1_000);
+    verbose::Bool=false) where {Nr,Nc,Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},R<:Real,V<:Union{R,Complex{R}}}  =
+    poly_solutions(Val(:mvhankel), result.relaxation, result.moments, ϵ, δ, verbose)
+
+function poly_solutions(::Val{:mvhankel}, relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},
+    moments::MomentVector{R,V,Nr,Nc}, ϵ::R, δ::R, verbose::Bool) where {Nr,Nc,R<:Real,V<:Union{R,Complex{R}}}
     @verbose_info("Preprocessing for decomposition")
-    relaxation = result.relaxation
-    moments = result.moments
     nvars = Nr + 2Nc
     deg = 2degree(relaxation)
     @assert(deg > 1) # It is in principle possible to have deg = 0 - but only if the problem itself was to optimize zero over
@@ -35,7 +37,7 @@ function poly_solutions(::Val{:mvhankel}, result::Result{Rx,V}, ϵ::R=R(1 // 1_0
         rmul!(@view(moments[monomial_count(nvars, deg -1)+1:end]), λ^deg) # the last might be incomplete
     end
     # for each variable clique, we can perform the original decomposition algorithm
-    cliques = groupings(result.relaxation).var_cliques
+    cliques = groupings(relaxation).var_cliques
     solutions_cl = FastVec{Union{Matrix{V},Missing}}(buffer=length(cliques))
     @verbose_info("Starting solution extraction per clique")
     extraction_time = @elapsed begin
@@ -50,10 +52,10 @@ function poly_solutions(::Val{:mvhankel}, result::Result{Rx,V}, ϵ::R=R(1 // 1_0
                 a1 = conj(a1)
             end
             try
-                result = poly_solutions(Val(Symbol("mvhankel-scaled")), moments, a1, a2, clique, ϵ)
-                λ > ϵ && rmul!(result, inv(λ))
-                unsafe_push!(solutions_cl, result)
-                @verbose_info("Potential solutions:\n", result)
+                result_cl = poly_solutions(Val(Symbol("mvhankel-scaled")), moments, a1, a2, clique, ϵ)
+                λ > ϵ && rmul!(result_cl, inv(λ))
+                unsafe_push!(solutions_cl, result_cl)
+                @verbose_info("Potential solutions:\n", result_cl)
             catch e
                 if e isa MonomialMissing
                     unsafe_push!(solutions_cl, missing)

@@ -47,3 +47,5 @@ end
 # a certain problem must always give the same result. So there's no use in doing the work all over, even if the parameters
 # have changed.
 Newton(relaxation::Newton; kwargs...) = relaxation
+
+default_solution_method(::Newton) = :heuristic

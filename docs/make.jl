@@ -4,12 +4,13 @@ using MultivariatePolynomials, DynamicPolynomials
 
 makedocs(sitename="PolynomialOptimization.jl",
     modules=filter(m -> startswith(string(m), "PolynomialOptimization"), Docs.modules),
-    format=Documenter.HTML(prettyurls=false),
+    format=Documenter.HTML(prettyurls=false, size_threshold=nothing),
     pages=[
         "index.md",
         "guide.md",
         "reference.md",
-        "solverreference.md",
+        "includedsolvers.md",
+        "backend.md",
         "auxreference.md",
         "simplepolynomials.md"
     ],

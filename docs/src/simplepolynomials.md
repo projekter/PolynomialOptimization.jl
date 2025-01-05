@@ -113,6 +113,7 @@ SimpleConjMonomial
 SimpleMonomial(::SimpleConjMonomial{Nr,Nc,<:Integer,<:AbstractExponents}) where {Nr,Nc}
 SimpleMonomialVector
 SimplePolynomial
+change_backend
 ```
 
 ## Implementation peculiarities

@@ -31,19 +31,7 @@ function halfpolytope_from_file(filepath::AbstractString, objective::AbstractPol
     out = halfpolytope_from_file(filepath, SimplePolynomial(objective); verbose, kwargs...)
     if out isa SimpleMonomialVector
         conv_time = @elapsed begin
-            real_vars = variable_union_type(objective)[]
-            complex_vars = similar(real_vars)
-            for v in variables(objective)
-                if isreal(v)
-                    push!(real_vars, v)
-                elseif isconj(v)
-                    vo = conj(v)
-                    vo ∈ complex_vars || push!(complex_vars, vo)
-                else
-                    push!(complex_vars, v)
-                end
-            end
-            mv = monomial_vector(FakeMonomialVector(out, real_vars, complex_vars))
+            mv = change_backend(out, variables(objective))
         end
         @verbose_info("Converted monomials back to a $(typeof(mv)) in $conv_time seconds")
         return mv

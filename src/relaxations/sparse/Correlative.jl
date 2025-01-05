@@ -1,5 +1,4 @@
 struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
-    problem::P
     parent::AbstractRelaxation{P} # no specialization
     groupings::G
 
@@ -72,7 +71,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         end
         # This parent grouping will put some constraints on the form of the prefactor(s). With correlative sparsity, we
         # additionally enforce that no variable occurs in a grouping that is not already present in the constraint.
-        for (constrs, parentgroupings, h, l, md) in (
+        @unroll for (constrs, parentgroupings, h, l, md) in (
             (problem.constr_zero, parent.zeros, high_order_zero, low_order_zero, parentmaxzerodeg),
             (problem.constr_nonneg, parent.nonnegs, high_order_nonneg, low_order_nonneg, parentmaxnonnegdeg),
             (problem.constr_psd, parent.psds, high_order_psd, low_order_psd, parentmaxpsddeg)
@@ -143,9 +142,9 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
             newobj[i] = SimpleMonomialVector{Nr,Nc}(ExponentsMultideg{Nr+2Nc,I}(0, parentmaxobjdeg, minmultideg, maxmultideg))
         end
-        for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
-                                           (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
-                                           (problem.constr_psd, parentmaxpsddeg, newpsd))
+        @unroll for (constrs, parentdeg, news) in ((problem.constr_zero, parentmaxzerodeg, newzero),
+                                                   (problem.constr_nonneg, parentmaxnonnegdeg, newnonneg),
+                                                   (problem.constr_psd, parentmaxpsddeg, newpsd))
             for (constr, maxdeg, newel) in zip(constrs, parentdeg, news)
                 constrvars = effective_variables(constr, rettype=Vector,
                     by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{SimplePolynomials.smallest_unsigned(Nr+2Nc)}
@@ -178,7 +177,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         ))
         @verbose_info("Obtained embedding in ", gentime, " seconds")
 
-        return new{P,typeof(gr)}(problem, relaxation, gr)
+        return new{P,typeof(gr)}(relaxation, gr)
     end
 end
 

@@ -94,6 +94,33 @@ function Base.show(io::IO, m::MIME"text/plain", p::Problem)
     end
 end
 
+# We need to provide "tolerant" versions of the complex degree-related stuff. They will not raise an error when real/imaginary
+# parts arise, but are functionally equivalent else. We must then make sure that real/imaginary parts are never mixed with the
+# complex representation of the same variable.
+function halfdegree_tolerant(t::AbstractTermLike)
+    realdeg = 0
+    cpdeg = 0
+    conjdeg = 0
+    for (var, exp) in powers(t)
+        if isreal(var)
+            realdeg += exp
+        else
+            if isconj(var)
+                conjdeg += exp
+            else
+                cpdeg += exp
+            end
+        end
+    end
+    return div(realdeg, 2, RoundUp) + max(cpdeg, conjdeg)
+end
+function maxhalfdegree_tolerant(X::AbstractArray{<:AbstractTermLike})
+    return isempty(X) ? 0 : maximum(halfdegree_tolerant, X, init=0)
+end
+maxhalfdegree_tolerant(p::AbstractPolynomialLike) = maxhalfdegree_tolerant(terms(p))
+maxhalfdegree_tolerant(m::AbstractMatrix{<:AbstractPolynomialLike}, args...) =
+    maximum((maxhalfdegree_tolerant(p, args...) for p in m), init=0)::Int
+
 @doc raw"""
     poly_problem(objective; zero=[], nonneg=[], psd=[], perturbation=0.,
         factor_coercive=1, perturbation_coefficient=0., perturbation_form=0,
@@ -207,6 +234,16 @@ function poly_problem(objective::P;
     ncomplex = length(vars) - nreal
     complex = !iszero(ncomplex) # this only captures the presence of complex-valued variables, not of complex-valued
                                 # coefficients
+    if complex
+        for v in vars
+            if isrealpart(v) || isimagpart(v)
+                ov = ordinary_variable(v)
+                if insorted(ov, vars, rev=true) || insorted(conj(ov), vars, rev=true)
+                    error("A complex-valued variable must not be used simultaneously with its real/imaginary decomposition and its complex value")
+                end
+            end
+        end
+    end
 
     T = let checkcomplex=p -> coefficient_type(p)<:Complex
         # our solvers and other operations will require machine float. For now, this is hard-coded here.
@@ -276,10 +313,10 @@ function poly_problem(objective::P;
     #endregion
 
     #region Obtaining information on the minimal degree
-    degrees_eqs = maxhalfdegree.(zero)
-    degrees_nonnegs = maxhalfdegree.(nonneg)
-    degrees_psds = convert.(Int, maxhalfdegree.(psd)) # somehow, this is the only expression that gives Any[] when empty
-    mindeg = max(maxhalfdegree(objective), maximum(degrees_eqs, init=0), maximum(degrees_nonnegs, init=0),
+    degrees_eqs = maxhalfdegree_tolerant.(zero)
+    degrees_nonnegs = maxhalfdegree_tolerant.(nonneg)
+    degrees_psds = convert.(Int, maxhalfdegree_tolerant.(psd)) # somehow, this is the only expression that gives Any[] when empty
+    mindeg = max(maxhalfdegree_tolerant(objective), maximum(degrees_eqs, init=0), maximum(degrees_nonnegs, init=0),
                  maximum(degrees_psds, init=0))
     #endregion
 
@@ -291,8 +328,8 @@ function poly_problem(objective::P;
         tighten!(tighter, objective, vars, zero, nonneg; verbose)
         # tightening will lead to new zero constraints (of type simple) and new inequality constraints.
         @verbose_info("Tightening completed")
-        @inbounds append!(degrees_eqs, maxhalfdegree.(@view(zero[zero_len+1:end])))
-        @inbounds append!(degrees_nonnegs, maxhalfdegree.(@view(nonneg[nonneg_len+1:end])))
+        @inbounds append!(degrees_eqs, maxhalfdegree_tolerant.(@view(zero[zero_len+1:end])))
+        @inbounds append!(degrees_nonnegs, maxhalfdegree_tolerant.(@view(nonneg[nonneg_len+1:end])))
         mindeg = max(mindeg, maximum(@view(degrees_eqs[zero_len+1:end]), init=0),
                      maximum(@view(degrees_nonnegs[nonneg_len+1:end]), init=0))
     end

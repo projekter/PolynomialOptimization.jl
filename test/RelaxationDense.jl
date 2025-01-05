@@ -36,7 +36,15 @@ end
         for solver in solvers
             for (i, sol) in ((1, -4.), (2, -3.904891578336841))
                 @testset let i=i, solver=solver
-                    @test poly_optimize(solver, prob, i).objective ≈ sol atol = 5e-3
+                    res = poly_optimize(solver, prob, i)
+                    @test res.objective ≈ sol atol = 5e-3
+                    if i == 2 && solver != :SCSMoment
+                        for extraction in (:mvhankel, :heuristic)
+                            pas = poly_all_solutions(extraction, res)
+                            @test isone(length(pas))
+                            @test pas[1][1] ≈ [-0.8047780612688199, 1.804778061268820] atol = 1e-6
+                        end
+                    end
                 end
             end
         end

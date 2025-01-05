@@ -1,3 +1,7 @@
+export issuccess
+
+import LinearAlgebra: issuccess
+
 """
     MomentVector(relaxation::AbstractRelaxation, values::AbstractVector{R} where {R<:Real})
 
@@ -6,8 +10,7 @@ that were present in the optimization problem. This vector can be indexed in two
 - linearly, which will just transparently yield what linearly indexing `values` would yield
 - with a monomial (or multiple monomials, which means that the product of all the monomials is to be considered), which will
   yield the value that is associated with this monomial; if the problem was complex-valued, this will be a `Complex{R}`.
-While `MomentVector` implements the `AbstractVector` interface, it can also be iterated, giving `Pair`s that assign values to
-monomials.
+In order to get an association-like iterator, use [`MomentAssociation`](@ref).
 
 This type is not exported.
 """
@@ -81,11 +84,32 @@ function Base.get(d::MomentVector{R,Complex{R},Nr,Nc,<:AbstractSparseVector{R}},
         @assert(!isempty(ridx_c))
         @inbounds idx_re, idx_im = minmax(ridx[begin], ridx_c[begin]) # rowvals is ascending, so this is transitive
         @inbounds val_re, val_im = nz[idx_re], nz[idx_im]
-        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_re : -val_re)
+        return isnan(val_re) || isnan(val_im) ? not_found() : Complex{R}(val_re, idx < idx_c ? val_im : -val_im)
     end
 end
-function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVector{R},<:ExponentsAll{<:Any,I}},
-    (i, rem, deg, degIncAt)=(1, length(d.values), 0, 2)) where {R,Nr,Nc,I<:Integer}
+
+"""
+    MomentAssociation(m::MomentVector)
+
+Creates a associative iterator over the moment vector `m` that, upon iteration, returns `Pair`s assigning values to monomials.
+
+This type is not exported.
+"""
+struct MomentAssociation{M<:MomentVector}
+    d::M
+end
+
+Base.IteratorSize(::Type{<:MomentAssociation{<:(MomentVector{R,<:Union{R,Complex{R}},<:Any,0} where {R})}}) = Base.HasLength()
+Base.IteratorSize(::Type{<:MomentAssociation}) = Base.SizeUnknown() # during iteration, we combine the real/complex parts
+Base.eltype(::Type{MomentAssociation{M}}) where {R,V<:Union{R,Complex{R}},Nr,Nc,D<:AbstractVector{R},I<:Integer,
+                                                 E<:AbstractExponents{<:Any,I},M<:MomentVector{R,V,Nr,Nc,D,E}} =
+    Pair{SimpleMonomial{Nr,Nc,I,E},V}
+Base.length(m::MomentAssociation{<:(MomentVector{R,<:Union{R,Complex{R}},<:Any,0} where {R})}) = length(m.d)
+Base.get(m::MomentAssociation, args...) = get(m.d, args...)
+function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVector{R},
+                                                          <:ExponentsAll{<:Any,I}}},
+    (i, rem, deg, degIncAt)=(1, length(m.d.values), 0, 2)) where {R,Nr,Nc,I<:Integer}
+    d = m.d
     while true
         iszero(rem) && return nothing
         rem -= 1
@@ -99,22 +123,27 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractVe
         iszero(Nc) && @inbounds return Pair(mon, d.values[i]), (i +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(d.values[i])), (i +1, rem, deg, degIncAt)
-        mon.index < cmon.index &&
-            @inbounds return Pair(mon, Complex(d.values[i], d.values[cmon.index])), (i +1, rem, deg, degIncAt)
+        mon.index > cmon.index &&
+            @inbounds return Pair(mon, Complex(d.values[cmon.index], -d.values[i])), (i +1, rem, deg, degIncAt)
         # skip over the conjugates
+        i += 1
     end
 end
-function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},<:ExponentsAll{<:Any,I}}) where {R,Nr,Nc,I<:Integer}
+function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},
+                                                          <:ExponentsAll{<:Any,I}}}) where {R,Nr,Nc,I<:Integer}
+    d = m.d
     rv = rowvals(d.values)
     isempty(rv) && return nothing
     idx = 1
     rem = length(rv)
     deg = @inbounds degree_from_index(unsafe, d.e, rv[begin])
     degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
-    return iterate(d, (idx, rem, deg, degIncAt))
+    return iterate(m, (idx, rem, deg, degIncAt))
 end
-function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},<:ExponentsAll{<:Any,I}},
+function Base.iterate(m::MomentAssociation{<:MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSparseVector{R},
+                                                          <:ExponentsAll{<:Any,I}}},
     (idx, rem, deg, degIncAt)) where {R,Nr,Nc,I<:Integer}
+    d = m.d
     rv, nz = rowvals(d.values), nonzeros(d.values)
     while true
         iszero(rem) && return nothing
@@ -123,22 +152,33 @@ function Base.iterate(d::MomentVector{R,<:Union{R,Complex{R}},Nr,Nc,<:AbstractSp
         # Determining the degree for every single iteration anew is quite wasteful. We can make things simpler by reusing the
         # degree and storing the next index at which it is incremented. Let's assume that we probably don't skip too many
         # complete degrees here, so that an incremental approach is the best.
-        while i ≥ degIncAt
-            deg += 1
-            degIncAt = length(ExponentsDegree{Nr+2Nc,I}(0, deg)) +1
+        if i ≥ degIncAt
+            counts = index_counts(unsafe, d.e)
+            while i ≥ degIncAt
+                deg += 1
+                degIncAt = @inbounds(counts[deg+1, 1]) +1
+            end
         end
         mon = SimpleMonomial{Nr,Nc}(unsafe, d.e, i, deg)
         iszero(Nc) && @inbounds return Pair(mon, nz[idx]), (idx +1, rem, deg, degIncAt)
         cmon = conj(mon)
         cmon.index == mon.index && @inbounds return Pair(mon, Complex(nz[idx])), (idx +1, rem, deg, degIncAt)
-        if mon.index < cmon.index
+        if mon.index > cmon.index
             cidx = searchsorted(rv, cmon.index)
             @assert(!isempty(cidx))
-            @inbounds return Pair(mon, Complex(nz[idx], nz[cidx[begin]])), (idx +1, rem, deg, degIncAt)
+            @inbounds return Pair(mon, Complex(nz[cidx[begin]], -nz[idx])), (idx +1, rem, deg, degIncAt)
         end
         # skip over the conjugates
+        idx += 1
     end
 end
+
+moment_vector_type(::Type{Rx}, ::Type{V}) where {R<:Real,V<:Union{R,Complex{R}},Nr,Nc,I<:Integer,
+                                                 Rx<:AbstractRelaxation{<:Problem{<:SimplePolynomial{
+                                                     <:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,I}
+                                                 }}}} =
+    MomentVector{R,V,Nr,Nc,<:Union{Vector{R},SparseVector{R,I},SubArray{R,1,Vector{R},Tuple{UnitRange{I}},true}},
+                 ExponentsAll{Nr+2Nc,I}}
 
 """
     Result
@@ -149,7 +189,8 @@ A `Result` struct `r` contains information about
 - the optimized problem (available via [`poly_problem`](@ref poly_problem(::Result)))
 - the used method (`r.method`)
 - the time required for the optimization in seconds (`r.time`)
-- the status of the solver (`r.status`), which also depends on the solver type
+- the status of the solver (`r.status`), which also depends on the solver type. Use [`issuccess`](@ref) to check whether this
+  is a successful status.
 - the returned primal value of the solver (`r.objective`), which, if the status was successful, is a lower bound to the true
   minimum
 - the moment information in vector form (`r.moments`), which allows to construct a [moment matrix](@ref moment_matrix),
@@ -158,13 +199,30 @@ A `Result` struct `r` contains information about
 
 This type is not exported.
 """
-struct Result{R<:AbstractRelaxation,V,M<:MomentVector{<:Any,V}}
-    relaxation::R
-    method::Symbol
-    time::Float64
-    status
-    objective::Float64
-    moments::M
+mutable struct Result{Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
+    const relaxation::Rx
+    const method::Symbol
+    const time::Float64
+    state
+    const status
+    const objective::V
+    moments
+
+    Result(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,<:Any,Nc}}}, method::Symbol, time::Float64,
+        @nospecialize(state), @nospecialize(status), objective::R) where {R<:Real,Nc} =
+        new{typeof(relaxation),R,iszero(Nc) ? R : Complex{R}}(relaxation, method, time, state, status, objective, missing)
+end
+
+function Base.getproperty(r::Result{Rx,R,V}, f::Symbol) where {Rx<:AbstractRelaxation,R<:Real,V<:Union{R,Complex{R}}}
+    if f === :moments
+        T = moment_vector_type(Rx, V)
+        if ismissing(getfield(r, :moments))
+            return setfield!(r, :moments, Solver.extract_moments(r.relaxation, r.state))::T
+        else
+            return getfield(r, f)::T
+        end
+    end
+    return getfield(r, f)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", x::Result)
@@ -180,6 +238,18 @@ function Base.show(io::IO, ::MIME"text/plain", x::Result)
 end
 
 Base.eltype(::Type{<:(Result{<:AbstractRelaxation,V})}) where {V} = V
+
+"""
+    issuccess(r::Result)
+
+Returns `true` if the solver successfully solved the relaxation and provided a solution, and `false` otherwise.
+
+!!! info
+    Solvers often do not have just a single "good" status code, but also "near successes". Whether they will return `true` or
+    `false` is dependent on the implementation. The `status` field of the result is always available to get the original return
+    value.
+"""
+issuccess(r::Result) = issuccess(Val(r.method), r.status)
 
 """
     poly_problem(r::Result)

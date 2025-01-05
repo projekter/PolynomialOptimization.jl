@@ -50,6 +50,8 @@ SparsityTermBlock
 SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
+CliqueMerged
+iterate!(::SparsityTerm)
 ```
 
 ## Optimization and problem solutions
@@ -57,8 +59,16 @@ TermMode
 CurrentModule = PolynomialOptimization
 ```
 ```@docs
-poly_optimize
+poly_optimize(::Val, ::AbstractRelaxation)
+poly_optimize(::Val, ::Problem, ::Vararg{Any})
+poly_optimize(::Result)
+Solver.RepresentationMethod
+RepresentationPSD
+RepresentationSDD
+RepresentationDD
+RepresentationIAs
 Result
+issuccess(::Result)
 poly_problem(::Result)
 optimality_certificate
 poly_all_solutions
@@ -66,6 +76,10 @@ poly_solutions
 poly_solution_badness
 moment_matrix
 MomentVector
+MomentAssociation
+SOSCertificate
+sos_matrix
+IterateRepresentation
 ```
 
 ## Newton polytope construction (manually)
@@ -73,12 +87,4 @@ Note that using these functions is usually not necessary; construct a [`Newton`]
 ```@docs
 Newton.halfpolytope
 Newton.halfpolytope_from_file
-```
-
-## Lancelot
-`PolynomialOptimization` provides an interface to LANCELOT. This is only temporary, as the GALAHAD developers are developing
-Julia interfaces themselves (in fact, this is already there - but LANCELOT is the only part that not even has a C interface).
-To use this interface, make sure [`GALAHAD.jl`](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) is loaded.
-```@docs
-LANCELOT_simple
 ```

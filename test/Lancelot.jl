@@ -1,6 +1,6 @@
 using Test
 using PolynomialOptimization, GALAHAD
-using PolynomialOptimization: LANCELOT_simple
+using PolynomialOptimization.Solvers.LANCELOT: LANCELOT_simple
 using MultivariatePolynomials
 import DynamicPolynomials
 

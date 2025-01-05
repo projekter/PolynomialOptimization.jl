@@ -149,3 +149,15 @@ function effective_variables_in(p::SimplePolynomial, in)
     end
     return true
 end
+
+"""
+    change_backend(p::SimplePolynomial, variables::AbstractVector{<:AbstractVariable})
+
+Changes a `SimplePolynomial` into a different implementation of `MultivariatePolynomials`, where the variables are taken from
+the given vector in the order as they appear (but keeping real and complex variables distinct). Note that the coefficients are
+returned without making a copy, which depending on the backend can imply back-effects on `p` itself should the output be
+changed.
+This conversion is not particularly efficient, as it works with generic implementations.
+"""
+change_backend(p::SimplePolynomial, variables::AbstractVector{<:AbstractVariable}) =
+    polynomial(p.coeffs, change_backend(p.monomials, variables))

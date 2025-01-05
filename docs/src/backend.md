@@ -1,10 +1,14 @@
 ```@meta
 CurrentModule = PolynomialOptimization.Solver
+CollapsedDocStrings = true
 ```
 
-# Solver reference
+# Backend
 `PolynomialOptimization` mostly uses external solvers that have Julia bindings or are implemented in Julia, but it also
-provides own solver implementations particularly for the purpose of polynomial optimization.
+provides own solver implementations particularly for the purpose of polynomial optimization. This page is only relevant if you
+intend to implement an interface between `PolynomialOptimization` and a new solver or if you want to provide missing
+functionality for an existing solver. It is of no relevance if you only want to use the existing solvers.
+
 !!! warning
     The package does not introduce any hard dependencies on the external solvers. Therefore, you may or may not decide to
     install them on your system. Instead, the solvers are addressed as weak dependencies. This means that *you have to load the
@@ -36,50 +40,6 @@ consists of just a few methods for the various functions.
 The optimization of polynomial problems requires a solver that understands linear and semidefinite constraints. All functions
 in this section are defined (and exported) in the submodule `PolynomialOptimization.Solver`.
 
-### [List of supported solvers](@id solvers_poly_optimize)
-The following list contains all the solvers and the required packages that provide access to the solver.
-```@meta
-# (or ∅ if the solver is provided by `PolynomialOptimization` itself)
-```
-A solver of name `X` will always provide at least one of the two methods `:XSOS` or `:XMoment`. The former models the
-sum-of-squares formulation of the problem - each monomial corresponds to one constraint, and the solution comes from the dual
-vector. The latter models the Lasserre moment hierarchy of the problem - each monomial corresponds to a primal variable.
-Which method (or both) is offered by the solver depends on the particular interface that is supported by the solver and which
-form fits more naturally to this interface. Every solver will also provide an alias `:X` method that defaults to the
-recommended method for this solver.
-The given performance indicators are merely based on experience and may not be accurate for your particular problem. In
-particular the maximally recommended basis size depends heavily on the structure of the final problem, which can easily put the
-number up or down by 100 or more. All solvers may expose options that can influence the runtime behavior.
-
-|  Solver     |                            Package                          |   License  | Methods     | Speed    | Accuracy | Memory  | max. recomm. basis size |
-| ------:     | :---------------------------------------------------------: | :--------: | :---------: | :-----:  | :------: | :-----: | :---------------------- |
-| Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment      | 👍👍👍  | 👍👍👍  | 👍👍    | ~200                    |
-| COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment      | 👍👍👍  | 👍👍👍  | 👍👍👍  | ~700                    |
-| Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment      | 👍👍    | 👍👍     | 👍      | ~100                    |
-| LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear | n.a.   | n.a.      | 👍👍👍 | n.a.                    |
-| Mosek[^3]   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | SOS, moment | 👍👍👍  | 👍👍👍  | 👍👍    | ~300 - 500              |
-| SCS         | [SCS.jl](https://github.com/jump-dev/SCS.jl)                | MIT        | moment      | 👍      | 👍       | 👍👍👍  |                         |
-```@meta
-#| STRIDE      | ∅ (branch `stride`)                                         |            | moment      |       |           |         |                         |
-#| SpecBM      | ∅ (branch `specbm`)                                         |            | moment      |       |           |         |                         |
-```
-
-[^1]: Note that by default, a sparse solver is used (unless the problem was constructed with a `factor_coercive` different from
-      one). This is typically a good idea for large systems with not too much monomials. However, if you have a very dense
-      system, the sparse solver will take forever; better pass `dense=true` to the optimization routine. This will then be much
-      faster (and always much more accurate).
-[^2]: LANCELOT is a nonlinear solver that directly works on the problem itself. It does not use a relaxation. Therefore, it
-      cannot provide lower-bound guarantees on the objective value; however, there is no problem with the extraction of a
-      solution, as the solver directly works on the decision variables. When invoking the LANCELOT solver, a function is
-      returned which performs the optimization and which requires a vector of initial values as parameter. This function will
-      then return a 2-tuple with the (locally) optimal objective value and the point of the local optimum.
-      Currently, the LANCELOT interface does not support complex-valued problems.
-[^3]: `:MosekMoment` requires at least version 10, `:MosekSOS` already works with version 9.
-      The moment variant is more prone to failure in case of close-to-illposed problems; sometimes, this is an issue of the
-      presolver, which can be turned off by passing `MSK_IPAR_PRESOLVE_USE="MSK_PRESOLVE_MODE_OFF"` to [`poly_optimize`](@ref).
-      The performance indicators in the table are valid for `:MosekSOS`. The new PSD cone interface of Mosek 10 that is used by
-      the moment-based variant proves to be much slower than the old one; therefore, using `:MosekMoment` is not recommended.
-
 ### Solver interface
 In general, a solver implementation can do whatever it wants; it just needs to implement the [`poly_optimize`](@ref) method
 with the appropriate `Val`-wrapped solver method as its first parameter. However, it is very helpful to just do some basic
@@ -92,17 +52,44 @@ problem. Usually, a solver falls in one of two categories:
 - Problem data is constructed incrementally via various calls to API functions of the solver, which does not provide access to
   its internals. In this case, the new type should be a descendant of [`AbstractAPISolver`](@ref). Usually, commercial solvers
   fall in this category.
-However, it is not required that the type is in fact a subtype of either of those. If it is not, then [`mindex`](@ref) needs to
-be implemented.
+However, it is not required that the type is in fact a subtype of either of those; the most general possible supertype is
+[`AbstractSolver`](@ref), which does not make any assumptions or provide any but the most skeleton fallback implementations and
+a default for [`mindex`](@ref).
 ```@docs
+AbstractSolver
 mindex
 ```
-Every implementation of [`poly_optimize`](@ref) should return a tuple consisting of the optimal value, the status of the
-solver, and an instance of a [`MomentVector`](@ref) containing the resulting moment data.
+Every implementation of [`poly_optimize`](@ref) should return a tuple that contains some internal state of the solver as well
+as the optimal value and the status of the solver. A method for [`issuccess`](@ref issuccess(::Val, ::Any)) should then
+translate this status into a simple boolean, where deciding on ambiguities (near success) is up to the solver implementation.
+```@docs; canonical=false
+poly_optimize(::Val, ::AbstractRelaxation, ::RelaxationGroupings)
+issuccess(::Val, ::Any)
+```
 Once a solver has been implemented, it should add its solver symbol to the vector `solver_methods`, which enables this solver
 to be chosen automatically. Apart from the exact specification `:<solvername>Moment` or `:<solvername>SOS`, a short form
 `:<solvername>` that chooses the recommended method should also be implemented. For this, the [`@solver_alias`](@ref) macro can
-be used.
+be used. When details on the solution data a requested, the [`extract_moments`](@ref), [`extract_sos`](@ref), or
+[`extract_info`](@ref) function is called, where at least the former two have to be implemented for each solver:
+```@docs
+extract_moments
+extract_sos
+extract_sos_prepare
+extract_info
+```
+In order to relate aspects of the problem with data in the solver, the cones that are added are counted. This works
+automatically, keeping a separate counter for every type of cone and counting vector-valued cones (which are most) with their
+actual length. This behavior can be customized:
+```@docs
+@counter_alias
+@counter_atomic
+addtocounter!
+Counters
+```
+Using this information, an additional implementation may be provided for a faster re-optimization of the same problem:
+```@docs
+poly_optimize(::Val, ::Any, ::AbstractRelaxation, ::RelaxationGroupings)
+```
 
 While this page documents in detail how a new solver can be implemented, the explanation is far more extensive than an actual
 implementation. In order to implement a new solver, it is therefore recommended to first determine the category in which it
@@ -110,7 +97,7 @@ falls, then copy and modify an appropriate existing implementation.
 
 #### [`AbstractSparseMatrixSolver`](@ref)
 This solver type accumulates data in a COO matrix-like format. The callback functions can use
-[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset})
+[`append!`](@ref append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset})
 to quickly add given data to the temporary storage.
 However, the format is not yet suitable for passing data to the solver, as all monomials are densely indexed. Therefore, in a
 postprocessing step, the COO matrices have to be converted to CSC matrices with continuous monomial indices using
@@ -120,10 +107,10 @@ constraint duals for SOS optimization) can be constructed using [`MomentVector`]
 ```@docs
 AbstractSparseMatrixSolver
 SparseMatrixCOO
-append!(::SparseMatrixCOO{I,K,V,Offset}, ::AbstractIndvals{K,V}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
-append!(::SparseMatrixCOO{I,K,V,Offset}, ::PSDVector{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
+append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 coo_to_csc!
-MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
+MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::K, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
 #### [`AbstractAPISolver`](@ref)
@@ -143,22 +130,30 @@ MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, :
 There are some functions that should be implemented to tell `PolynomialOptimization` what kind of data the solver expects and
 which cones are supported; these should return constants.
 ```@docs
-SolverQuadratic
+supports_rotated_quadratic
 supports_quadratic
-supports_complex_psd
-AbstractPSDIndextype
+supports_psd_complex
+supports_dd
+supports_dd_complex
+supports_lnorm
+supports_lnorm_complex
+supports_sdd
+supports_sdd_complex
+PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
 psd_indextype
+negate_fix
+negate_free
 ```
 
 #### Working with data from the interface
 The interface functions that need to be implemented will get their data in the form of index-value pairs or a specific
 structure related to the desired matrix format.
 ```@docs
-AbstractIndvals
+Indvals
 PSDMatrixCartesian
-PSDVector
+IndvalsIterator
 ```
 
 #### Interface for the moment optimization
@@ -173,13 +168,21 @@ moment_add_equality!
 For this to work, the following methods (or a subset as previously indicated) must be implemented.
 ```@docs
 add_constr_nonnegative!
+add_constr_rotated_quadratic!
 add_constr_quadratic!
 add_constr_psd!
 add_constr_psd_complex!
+add_constr_dddual!
+add_constr_dddual_complex!
+add_constr_linf!
+add_constr_linf_complex!
+add_constr_sdddual!
+add_constr_sdddual_complex!
 add_constr_fix_prepare!
 add_constr_fix!
 add_constr_fix_finalize!
 fix_objective!
+add_var_slack!
 ```
 
 #### Interface for the SOS optimization
@@ -193,13 +196,21 @@ sos_add_equality!
 The following methods (or a subset as previously indicated) must be implemented.
 ```@docs
 add_var_nonnegative!
+add_var_rotated_quadratic!
 add_var_quadratic!
 add_var_psd!
 add_var_psd_complex!
+add_var_dd!
+add_var_dd_complex!
+add_var_l1!
+add_var_l1_complex!
+add_var_sdd!
+add_var_sdd_complex!
 add_var_free_prepare!
 add_var_free!
 add_var_free_finalize!
 fix_constraints!
+add_constr_slack!
 ```
 
 #### Helper functions
@@ -229,7 +240,8 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
-| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
+| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
 
 ### Solver interface
 The following functions need to be implemented so that a solver is available via [`Newton.halfpolytope`](@ref). The
@@ -251,7 +263,7 @@ which enables this solver to be chosen automatically.
 CurrentModule = PolynomialOptimization
 ```
 Automatic tightening of a polynomial optimization problem requires a linear solver that finds a solution to a system of linear
-equations that minimizes the ℓ₁-norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
+equations that minimizes the ℓ₁ norm (better yet, the ℓ₀-norm, if you can implement this). The solver is only called if the
 number of rows is smaller than the number of columns; else, the solution is calculated using SPQR's direct solver.
 
 ### [List of supported solvers](@id solvers_tighten)
@@ -260,7 +272,8 @@ is identical with the solver method (as a Symbol).
 
 |  Solver |                            Package                          |   License  |  Speed  | Accuracy | Memory  |
 | ------: | :---------------------------------------------------------: | :--------: | :-----: | :------: | :-----: |
-| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍 | 👍👍👍 |
+| COPT    | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
+| Mosek   | [Mosek.jl](https://github.com/MOSEK/Mosek.jl)               | commercial | 👍👍👍 | 👍👍👍  | 👍👍👍 |
 
 ### Solver interface
 The following function needs to be implemented so that a solver is available via automatic tightening.

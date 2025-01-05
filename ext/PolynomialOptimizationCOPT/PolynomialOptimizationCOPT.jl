@@ -1,8 +1,10 @@
 module PolynomialOptimizationCOPT
 
-using COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.Solver
-using PolynomialOptimization: @assert, @inbounds
+using COPT, MultivariatePolynomials, SparseArrays, PolynomialOptimization.Solver, PolynomialOptimization.Newton
+using PolynomialOptimization: @assert, @inbounds, @allocdiff
+using PolynomialOptimization.SimplePolynomials: veciter
 using COPT: _check_ret, Env#, libcopt
+import PolynomialOptimization
 
 global copt_env::Env
 
@@ -26,12 +28,17 @@ mutable struct COPTProb
 end
 
 Base.unsafe_convert(::Type{Ptr{copt_prob}}, problem::COPTProb) = problem.ptr
+Base.unsafe_convert(::Type{Ptr{Ptr{copt_prob}}}, problem::COPTProb) = Ptr{Ptr{copt_prob}}(pointer_from_objref(problem))
 
 include("./COPTMoment.jl")
+include("./Newton.jl")
+include("./Tightening.jl")
 
 function __init__()
     global copt_env = Env()
     pushfirst!(solver_methods, :COPT, :COPTMoment)
+    pushfirst!(Newton.newton_methods, :COPT)
+    pushfirst!(PolynomialOptimization.tightening_methods, :COPT)
 end
 
 @solver_alias COPT COPTMoment

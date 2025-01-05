@@ -11,7 +11,7 @@ mutable struct ExponentsDegree{N,I<:Integer} <: AbstractExponentsDegreeBounded{N
     Represents an exponent range that is restricted by a bound on the total degree.
     """
     function ExponentsDegree{N,I}(mindeg::Integer, maxdeg::Integer) where {N,I<:Integer}
-        0 ≤ N || throw(MethodError(ExponentDegree{N}, (mindeg, maxdeg)))
+        0 ≤ N || throw(MethodError(ExponentsDegree{N}, (mindeg, maxdeg)))
         0 ≤ mindeg ≤ maxdeg || throw(ArgumentError("Invalid degree specification"))
         new{N,I}(mindeg, maxdeg)
     end

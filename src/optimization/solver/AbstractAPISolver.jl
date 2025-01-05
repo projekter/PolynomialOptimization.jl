@@ -1,14 +1,14 @@
 export AbstractAPISolver
 
 """
-    AbstractAPISolver{K<:Integer}
+    AbstractAPISolver{K<:Integer,T,V} <: AbstractSolver{T,V}
 
 Superclass for a solver that requires new variables/constraints to be added via API calls. Solvers that are of this type must
 implement [`append!`](@ref append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}) in such a way that they directly add a
 variable (moment-case) to or constraint (SOS-case) to the solver.
-Concrete types that inherit from `AbstractAPISolver` must have a property `mon_to_solver::Dict{FastKey{K},solver indextype}`.
+Concrete types that inherit from `AbstractAPISolver` must have a property `mon_to_solver::Dict{FastKey{K},T}`.
 """
-abstract type AbstractAPISolver{K<:Integer} end
+abstract type AbstractAPISolver{K<:Integer,T,V} <: AbstractSolver{T,V} end
 
 """
     append!(solver::AbstractAPISolver{K}, key::K)
@@ -16,15 +16,15 @@ abstract type AbstractAPISolver{K<:Integer} end
 Appends at least one new variable (moment-case) or constraint (SOS-case) to the solver `state` that represents the monomial
 given by `key`.
 """
-append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
+Base.append!(::AbstractAPISolver{K}, ::K) where {K<:Integer}
 
-@inline function mindex(solver::AbstractAPISolver, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {Nr,Nc}
+@inline function mindex(solver::AbstractAPISolver{<:Integer,T}, monomials::SimpleMonomialOrConj{Nr,Nc}...) where {T,Nr,Nc}
     idx = monomial_index(monomials...)
     dictidx = Base.ht_keyindex(solver.mon_to_solver, FastKey(idx))
     @inbounds return (dictidx < 0 ?
         append!(solver, idx) :
         solver.mon_to_solver.vals[dictidx]
-    )::valtype(solver.mon_to_solver)
+    )::T
 end
 
 """
@@ -62,7 +62,7 @@ function MomentVector(relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomia
         solution = SparseVector(max_mons, mon_pos, moments)
     else
         solution = fill(NaN, max_mons)
-        copy!(@view(solution[mon_pos]), moments)
+        copyto!(@view(solution[mon_pos]), moments)
     end
     return MomentVector(relaxation, ExponentsAll{Nr+2Nc,K}(), solution)
 end

@@ -53,7 +53,7 @@ else
             end
         end
     end
-    @testset "LANCELOT solver" begin
-        include("./LocalSolver.jl")
+    @testset "Lancelot" begin
+        include("./Lancelot.jl")
     end
 end

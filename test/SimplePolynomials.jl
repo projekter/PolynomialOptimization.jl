@@ -332,7 +332,7 @@ end
     xmon = SimpleMonomial{2,0}([1, 0])
     @test variable(xmon) === x
     # no arithmetics
-    @test variable(Term(1.0, xmon)) === x
+    @test variable(Term(1., xmon)) === x
     @test_throws InexactError variable(Term(3, xmon)) === x
 
     @test transpose(x) === x
@@ -404,7 +404,7 @@ end
     zmon = SimpleMonomial{0,2}([1, 0], [0, 0])
     @test variable(zmon) === z
     # no arithmetics
-    @test variable(Term(1.0, zmon)) === z
+    @test variable(Term(1., zmon)) === z
     @test_throws InexactError variable(Term(3, zmon)) === z
 
     @test transpose(z) === z
@@ -499,8 +499,8 @@ end
     @test variable(xmon) === x
     @test variable(zmon) === z
     # no arithmetics
-    @test variable(Term(1.0, xmon)) === x
-    @test variable(Term(1.0, zmon)) === z
+    @test variable(Term(1., xmon)) === x
+    @test variable(Term(1., zmon)) === z
     @test_throws InexactError variable(Term(3, xmon)) === z
     @test_throws InexactError variable(Term(3, zmon)) === z
 
@@ -713,6 +713,99 @@ end
                 push!(correct_efvars, var)
             end
             evt(sub, sort!(collect(correct_efvars)))
+        end
+    end
+
+    @testset "iteration" begin
+        mv = SimpleMonomialVector{2,0}([2, 3, 5, 8, 13])
+        e = mv.e
+        @testset "standard (indexed)" begin
+            vi = veciter(mv)
+            it, state = iterate(vi)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 8))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 13))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (indexed)" begin
+            vi = veciter(mv, true)
+            it, state = iterate(vi)
+            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            it, state = iterate(vi, state)
+            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            it, state = iterate(vi, state)
+            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            it, state = iterate(vi, state)
+            @test it == (8, exponents(SimpleMonomial{2,0}(unsafe, e, 8)))
+            it, state = iterate(vi, state)
+            @test it == (13, exponents(SimpleMonomial{2,0}(unsafe, e, 13)))
+            @test isnothing(iterate(vi, state))
+        end
+
+        mv = SimpleMonomialVector{2,0}([2, 3, 5, 8, 9])
+        @testset "standard (iterated)" begin
+            vi = veciter(mv)
+            it, state = iterate(vi)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 8))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 9))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (iterated)" begin
+            vi = veciter(mv, true)
+            it, state = iterate(vi)
+            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            it, state = iterate(vi, state)
+            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            it, state = iterate(vi, state)
+            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            it, state = iterate(vi, state)
+            @test it == (8, exponents(SimpleMonomial{2,0}(unsafe, e, 8)))
+            it, state = iterate(vi, state)
+            @test it == (9, exponents(SimpleMonomial{2,0}(unsafe, e, 9)))
+            @test isnothing(iterate(vi, state))
+        end
+
+        mv = SimpleMonomialVector{2,0}(2:6)
+        @testset "standard (unit range)" begin
+            vi = veciter(mv)
+            it, state = iterate(vi)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 2))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 3))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 4))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 5))
+            it, state = iterate(vi, state)
+            @test it == exponents(SimpleMonomial{2,0}(unsafe, e, 6))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (unit range)" begin
+            vi = veciter(mv, true)
+            it, state = iterate(vi)
+            @test it == (2, exponents(SimpleMonomial{2,0}(unsafe, e, 2)))
+            it, state = iterate(vi, state)
+            @test it == (3, exponents(SimpleMonomial{2,0}(unsafe, e, 3)))
+            it, state = iterate(vi, state)
+            @test it == (4, exponents(SimpleMonomial{2,0}(unsafe, e, 4)))
+            it, state = iterate(vi, state)
+            @test it == (5, exponents(SimpleMonomial{2,0}(unsafe, e, 5)))
+            it, state = iterate(vi, state)
+            @test it == (6, exponents(SimpleMonomial{2,0}(unsafe, e, 6)))
+            @test isnothing(iterate(vi, state))
         end
     end
 end

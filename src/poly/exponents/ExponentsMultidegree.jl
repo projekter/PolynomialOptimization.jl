@@ -10,7 +10,7 @@ mutable struct ExponentsMultideg{N,I<:Integer,Vmin,Vmax} <: AbstractExponentsDeg
     counts::Matrix{I}
 
     @doc """
-        ExponentMultideg{N,I}(mindeg::Integer, maxdeg::Integer,
+        ExponentsMultideg{N,I}(mindeg::Integer, maxdeg::Integer,
             minmultideg::AbstractVector, maxmultideg::AbstractVector)
 
     Represents an exponent range that is restricted both by a global bound on the degree and by individual bounds on the
@@ -19,7 +19,7 @@ mutable struct ExponentsMultideg{N,I<:Integer,Vmin,Vmax} <: AbstractExponentsDeg
     """
     function ExponentsMultideg{N,I}(mindeg::Integer, maxdeg::Integer, minmultideg::Vmin, maxmultideg::Vmax) where
         {N,I<:Integer,Vmin<:AbstractVector{<:Integer},Vmax<:AbstractVector{<:Integer}}
-        0 ≤ N || throw(MethodError(ExponentDegree{N}, (mindeg, maxdeg)))
+        0 < N || throw(MethodError(ExponentsDegree{N}, (mindeg, maxdeg)))
         0 ≤ mindeg ≤ maxdeg || throw(ArgumentError("Invalid degree specification"))
         length(minmultideg) == length(maxmultideg) == N || throw(ArgumentError("Unsuitable multidegree lengths"))
         Σminmultideg = 0

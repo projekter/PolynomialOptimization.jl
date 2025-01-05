@@ -14,7 +14,7 @@ struct ExponentsAll{N,I<:Integer} <: AbstractExponentsUnbounded{N,I} end
 
 @inline @generated function index_counts(::Type{Ref}, ::ExponentsAll{N,I}) where {N,I<:Integer}
     N isa Integer || throw(MethodError(index_counts{N,I}, ()))
-    N ≤ 0 && error("The number of variables must be strictly positive")
+    N < 0 && error("The number of variables must be nonnegative")
     counts = Ref{Matrix{I}}(ones(I, 1, N +1)) # create an initial matrix in the beginning so that it is always guaranteed to
                                               # have N+1 columns (for convenience, fill the last column with 1, which
                                               # corresponds to zero variables) and at least one row
@@ -59,7 +59,6 @@ end
 
 function _exponents_to_index(e::ExponentsAll{N,I}, exponents, degree::Int, report_lastexp) where {N,I<:Integer}
     iszero(degree) && return isnothing(report_lastexp) ? one(I) : (one(I), 0)
-    nvars::Int = N
     counts, success = index_counts(e, degree)
     @assert(success)
     index::I = @inbounds counts[degree+1, 1]

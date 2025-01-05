@@ -17,13 +17,15 @@ MultivariatePolynomials.term_type(::XorTX{<:SimplePolynomial{Cold,Nr,Nc,<:Simple
     Term{C,monomial_type(M)}
 
 MultivariatePolynomials.polynomial_type(::XorTX{<:Term{C,<:SimpleMonomial{Nr,Nc,I}}}) where {C,Nr,Nc,I<:Integer} =
-    SimplePolynomial{C,Nr,Nc,SimpleMonomialVector{Nr,Nc,I,Tuple{ExponentsAll{Nr+2Nc,I},Vector{I}}}}
+    SimplePolynomial{C,Nr,Nc,SimpleMonomialVector{Nr,Nc,I,Tuple{ExponentsAll{Nr+2Nc,I},Vector{I}},SimpleMonomial{Nr,Nc,I,ExponentsAll{Nr+2Nc,I}}}}
 MultivariatePolynomials.polynomial_type(::XorTX{<:SimplePolynomial{<:Any,Nr,Nc,M}}, ::Type{C}) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} =
+    SimplePolynomial{C,Nr,Nc,M}
+MultivariatePolynomials.polynomial_type(::XorTX{M}, ::Type{C}) where {C,Nr,Nc,M<:SimpleMonomialVector{Nr,Nc}} =
     SimplePolynomial{C,Nr,Nc,M}
 
 MultivariatePolynomials.coefficient_type(::XorTX{SimplePolynomial{C}}) where {C} = C
 
-Base.convert(::Type{T}, x::T) where {T<:Union{<:SimpleVariable,<:SimpleMonomial,<:SimpleMonomialVector,<:SimplePolynomial}} = x
+Base.convert(::Type{T}, x::Q) where {T<:Union{<:SimpleVariable,<:SimpleMonomial,<:SimpleMonomialVector,<:SimplePolynomial},Q<:T} = x
 
 MultivariatePolynomials.promote_rule_constant(::Type{C}, M::Type{<:SimpleMonomial}) where {C} =
     term_type(M, promote_type(C, Int))

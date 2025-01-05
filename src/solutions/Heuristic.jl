@@ -15,31 +15,29 @@ function poly_solutions(::Val{:heuristic}, result::Result; verbose::Bool=false)
     # then, when analyzing the problem, set the perturbation parameter to some small value, which should lift all degeneracies.
     # However, this will also slightly modify the problem, changing the optimal value (and its point) a bit. For small
     # perturbations, the solution is close enough to provide ideal starting points for another optimizer.
-    solutions = poly_solutions(Val(Symbol("heuristic-postprocess")), result,
-        poly_solutions(Val(Symbol("heuristic-magnitudes")), result)...)
+    solutions = poly_solutions(Val(Symbol("heuristic-postprocess")), result.moments,
+        poly_solutions(Val(Symbol("heuristic-magnitudes")), result.relaxation, result.moments)...)
     @verbose_info("Extracted all signs/phases, found ", length(solutions), " possible solution",
         isone(length(solutions)) ? "" : "s")
     return solutions
 end
 
 function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
-    result::Result{<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},V}) where {Nr,Nc,R<:Real,V<:Union{R,Complex{R}}}
+    relaxation::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc,<:SimpleMonomialVector{Nr,Nc,MI}}}},
+    moments::MomentVector{R,V,Nr,Nc}) where {Nr,Nc,MI<:Integer,R<:Real,V<:Union{R,Complex{R}}}
     # In this part, we extract the parts of the solution by looking at the monomials that are powers of variables.
     solution = fill(iszero(Nc) ? R(NaN) : Complex(R(NaN), R(NaN)), Nr + Nc)
     I = SimplePolynomials.smallest_unsigned(Nr + 2Nc)
     zero_checks = Set{I}()
     unknown_signs = Set{I}()
     unknown_phases = Dict{I,Set{R}}()
-    relaxation = result.relaxation
-    moments = result.moments
-    basis = Relaxation.basis(relaxation)
-    deg = 2degree(relaxation)
+    e = ExponentsAll{Nr+2Nc,MI}()
+    deg = degree(relaxation)
     for i in 1:Nr
-        mon = SimpleMonomial(basis.e, SimpleRealVariable{Nr,Nc}(i)) # This may raise an error, but only if the user
-                                                                           # provided an insufficient basis manually.
+        mon = SimpleMonomial(e, SimpleRealVariable{Nr,Nc}(i))
         # The monomial is present in the original basis, so we try to reconstruct it by searching for its powers. We will
         # favor even powers (even over the variable itself), as they are not affected by multiple sign-symmetric solutions
-        for pow in 2:2:deg
+        for pow in 2:2:2deg
             val = moments[mon^pow]
             if !isnan(val)
                 if abs(val) ≤ R(1e-7) # almost zero
@@ -54,7 +52,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
                 # using remaining powers, but the result will probably be useless.
             end
         end
-        for pow in 1:2:deg
+        for pow in 1:2:2deg
             val = moments[mon^pow]
             if !isnan(val)
                 solution[i] = abs(val)^inv(pow)
@@ -68,7 +66,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
         @label real_done
     end
     for i in Nr+1:Nr+Nc
-        mon = SimpleMonomial(basis.e, SimpleComplexVariable{Nr,Nc}(i)) # similarly possible exception by user fault
+        mon = SimpleMonomial(e, SimpleComplexVariable{Nr,Nc}(i))
         # For complex-valued variables, favor the variable itself, as we cannot say which power would gobble the phases.
         val = moments[mon]
         if !isnan(val)
@@ -78,18 +76,20 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
             # we try to reconstruct it by searching for its powers. The phase reconstruction is ambiguous.
             abs_val = R(NaN)
             phase_candidates = Set{R}()
-            for pow in 2:deg
-                val = moments[mon^pow]
+            for pow1 in 1:deg, pow2 in 0:deg
+                pow1 == pow2 && continue # we cannot get any phase information
+                val = moments[mon^pow1 * SimpleConjMonomial(mon)^pow2]
                 if !isnan(val)
+                    Σpow, δpow = pow1 + pow2, pow1 - pow2
                     # we have candidates for the phase
                     if isnan(abs_val)
-                        abs_val = abs(val)^inv(pow)
-                        this_phase = atan(imag(val), real(val)) / pow
-                        ω = R(2) * π / pow
-                        append!(empty!(phase_candidates), (this_phase + j * ω for j in 0:pow-1))
+                        abs_val = abs(val)^inv(Σpow)
+                        this_phase = atan(imag(val), real(val)) / δpow
+                        ω = R(2) * π / δpow
+                        append!(empty!(phase_candidates), (this_phase + j * ω for j in 0:δpow-1))
                     else
                         # consistency check: all powers should give rise to the same magnitude
-                        if abs(abs_val - abs(val)^inv(pow)) > R(1e-7)
+                        if abs(abs_val - abs(val)^inv(Σpow)) > R(1e-7)
                             abs_val = R(NaN)
                             break
                         end
@@ -97,7 +97,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
                         new_candidates = Set{R}()
                         pow_phase = atan(imag(val), real(val))
                         for old_candidate in phase_candidates
-                            if abs(mod2pi(old_candidate * pow) - pow_phase) < R(1e-7)
+                            if abs(mod2pi(old_candidate * δpow) - pow_phase) < R(1e-7)
                                 new_candiates |= old_candiate
                             end
                         end
@@ -107,7 +107,7 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
                 end
             end
             if isnan(abs_val) || isempty(phase_candidates)
-                push!(zero_checks, var)
+                push!(zero_checks, i)
             elseif isone(length(phase_candidates))
                 solution[i] = abs_val * cis(@inbounds phase_candidates[begin])
             else
@@ -119,20 +119,18 @@ function poly_solutions(::Val{Symbol("heuristic-magnitudes")},
     return solution, zero_checks, unknown_signs, unknown_phases
 end
 
-function poly_solutions(::Val{Symbol("heuristic-postprocess")},
-    result::Result{<:AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}},V}, candidate::AbstractVector{V},
+function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentVector{R,V,Nr,Nc}, candidate::AbstractVector{V},
     zero_checks::Set{I}, unknown_signs::Set{I}, unknown_phases::Dict{I,Set{R}}) where {Nr,Nc,I<:Integer,R<:Real,V<:Union{R,Complex{R}}}
     isempty(zero_checks) && isempty(unknown_signs) && isempty(unknown_phases) && return [candidate]
     # Candidate contains the possible absolute values of the solutions. However,
     # - some unknown entries may in fact be zero: check for those indices in zero_checks
     # - some real-valued variables have an unknown sign: check for those in unknown_signs
     # - some complex-valued variables have multiple phases that could be assigned: check for those in unknown_phases
-    moments = result.moments
     dependencies = Set{I}() # We might not be able to resolve everything in the first iteration; keep track of things that
                             # would allow us to do better in the next.
     while true
         retry = false
-        for (mon, mon_val) in moments
+        for (mon, mon_val) in MomentAssociation(moments)
             isnan(mon_val) && continue
             if abs(mon_val) < R(1e-7)
                 isempty(zero_checks) && continue
@@ -260,10 +258,10 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
         # First, check the signs, for which there are only two options.
         if !isempty(unknown_signs)
             signpos = pop!(unknown_signs)
-            first_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), result, copy(candidate), zero_checks,
+            first_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, copy(candidate), zero_checks,
                 copy(unknown_signs), copy(unknown_phases))
             candidate[signpos] = -candidate[signpos]
-            second_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), result, candidate, zero_checks, unknown_signs,
+            second_sol = poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidate, zero_checks, unknown_signs,
                 unknown_phases)
             return [first_sol; second_sol]
         else
@@ -279,7 +277,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")},
             for candidate_phase in candidate_phases
                 candidateᵢ = copy(candidate)
                 candidateᵢ[candidate_index] *= cis(candidate_phase)
-                append!(solutions, poly_solutions(Val(Symbol("heuristic-postprocess")), result, candidateᵢ, zero_checks,
+                append!(solutions, poly_solutions(Val(Symbol("heuristic-postprocess")), moments, candidateᵢ, zero_checks,
                     copy(unknown_signs), copy(unknown_phases)))
             end
             return solutions

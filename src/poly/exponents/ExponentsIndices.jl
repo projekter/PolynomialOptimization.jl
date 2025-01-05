@@ -39,9 +39,9 @@ Base.size(::(ExponentIndices{I,<:AbstractExponents{N,I}} where {I<:Integer})) wh
 Base.@assume_effects :foldable :nothrow @inline function Base.getindex(efi::(ExponentIndices{I,<:AbstractExponents{N,I}} where {I<:Integer}),
     varidx::Integer) where {N}
     @boundscheck checkbounds(efi, varidx)
-    iter = iterate(efi)
+    iter = iterate(efi)::Tuple
     for _ in 2:varidx
-        iter = iterate(efi, iter[2])
+        iter = iterate(efi, iter[2])::Tuple
     end
     return iter[1]
 end

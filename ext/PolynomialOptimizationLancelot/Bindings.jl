@@ -1,5 +1,3 @@
-export LANCELOT_simple
-
 include("./FortranSpecials.jl")
 
 _desc(::Nothing, _) = C_NULL
@@ -44,7 +42,7 @@ The user should provide, at the very minimum, suitable values for the following 
 
 - `n::Integer`: the number of variables,
 - `X::AbstractVector{Float64}` (strided vector of size `n`): the starting point for the minimization
-- `MY_FUN::Callable`: a function for computing the objective function value for any `X`, whose interface has the default form
+- `MY_FUN`: a function for computing the objective function value for any `X`, whose interface has the default form
   `MY_FUN(X::AbstractVector{Float64})::Float64` where `X[1:n]` contains the values of the variables on input, and which returns
   a double precision scalar representing the value ``f(X)``.
 - If the gradient of ``f`` can be computed, then the (optional) keyword argument `MY_GRAD` must be specified and given a
@@ -238,8 +236,7 @@ is also a good source of additional information.
 Main author: Ph. Toint, November 2007.
 Copyright reserved, Gould/Orban/Toint, for GALAHAD productions
 """
-function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN::Base.Callable;
-    MY_GRAD::Union{Base.Callable,Missing}=missing, MY_HESS::Union{Base.Callable,Missing}=missing,
+function LANCELOT_simple(n::Integer, X::AbstractVector{Cdouble}, MY_FUN; MY_GRAD=missing, MY_HESS=missing,
     BL::Union{<:AbstractVector{Cdouble},Nothing}=nothing, BU::Union{<:AbstractVector{Cdouble},Nothing}=nothing, neq::Integer=0,
     nin::Integer=0, CX::Union{<:AbstractVector{Cdouble},Nothing}=nothing, Y::Union{<:AbstractVector{Cdouble},Nothing}=nothing,
     maxit::Integer=1000, gradtol::Real=1e-5, feastol::Real=1e-5, print_level::Integer=1)

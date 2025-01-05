@@ -10,7 +10,6 @@ import StatsBase
 
 export Newton, Relaxation
 
-const sqrt2 = sqrt(2.0)
 const haveMPI = Ref{Bool}(false)
 const debugging = false
 
@@ -19,10 +18,11 @@ include("./helpers/Helpers.jl")
 include("./Problem.jl")
 include("./relaxations/Relaxation.jl")
 using .Relaxation
+include("./optimization/Optimization.jl")
 include("./newton/Newton.jl")
 import .Newton
-include("./optimization/Optimization.jl")
 include("./solutions/SolutionExtraction.jl")
 include("./Tightening.jl")
+include("./solvers/Solvers.jl")
 
 end

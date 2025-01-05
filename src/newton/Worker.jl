@@ -196,8 +196,14 @@ function execute(V, verbose, mons, nthreads::Integer, task, secondtask, filepath
         threads = Vector{Union{Task,Nothing}}(undef, nthreads)
         # We can already start all the tasks; this main task that must still feed the data will continue running until we yield
         # to the scheduler.
-        @inbounds for (tid, taskₜ) in Iterators.flatten((zip(nthreads:-1:3, Iterators.map(clonetask, Iterators.repeated(task))),
-                                                        ((2, secondtask), (1, task))))
+        @inbounds for tid in nthreads:-1:1
+            if tid ≥ 3
+                taskₜ = clonetask(task)
+            elseif tid == 2
+                taskₜ = secondtask
+            else
+                taskₜ = task
+            end
             iter = iterators[tid]
             if isnothing(filepath)
                 filestuff = nothing

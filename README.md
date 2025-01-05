@@ -12,16 +12,3 @@ It _directly_ interfaces the solvers [Clarabel](https://github.com/oxfordcontrol
 [COPT](https://www.shanshu.ai/copt), [Hypatia](https://github.com/jump-dev/Hypatia.jl), [Mosek](https://www.mosek.com/), and
 [SCS](https://github.com/cvxgrp/scs) without using `JuMP`, avoiding this bottleneck so that indeed almost all the time is spent
 in the solver, not in the problem formulation.
-
-## About this branch
-
-This branch provides an interface to the [LANCELOT sovler](https://github.com/ralna/GALAHAD). LANCELOT is a sophisticated
-non-convex solver which can now be invoked using the solver `:LANCELOT`. Note that contrary to all other methods, this will
-*not* result in an optimization that is based on convex relaxations; no global guarantees are made. Futher notes:
-
-- We call `LANCELOT_simple`, which does not make use of all the potential sophistication LANCELOT provides as regards the use
-  of variables.
-- We use `Galahad.jl` for the pre-packaged binary to access LANCELOT (and a mechanism provide your own library, if you wish),
-  though we use our own wrapper for LANCELOT. Since LANCELOT currently only has a Fortran interface, we need to rely on
-  compiler internals to call it. Memory corruption will definitely occur if the library was compiled with a version of GFortran
-  smaller than 9 or e.g., Intel Fortran. Both use different formats for the array descriptors.

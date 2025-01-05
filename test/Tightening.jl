@@ -1,5 +1,6 @@
 # These tests require Mosek!
 include("./shared.jl")
+using PolynomialOptimization: tightening_methods
 
 function roundproblem(args...; kwargs...)
     roundfn = x -> round(x, digits=5)
@@ -13,8 +14,10 @@ end
 
 @testset "Example 6.1" begin
     DynamicPolynomials.@polyvar x[1:3]
-    prob = roundproblem(x[1] * x[2] * (10 - x[3]), nonneg=[x..., 1 - sum(x)], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(x[1] * x[2] * (10 - x[3]), nonneg=[x..., 1 - sum(x)], tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: 10.0x₁x₂ - x₁x₂x₃
 4 equality constraints
 01: 10.0x₁x₂ - x₁x₂x₃ - 20.0x₁²x₂ + 3.0x₁²x₂x₃ = 0
@@ -30,6 +33,7 @@ Objective: 10.0x₁x₂ - x₁x₂x₃
 10: 10.0x₁ - x₁x₃ - 20.0x₁x₂ + 3.0x₁x₂x₃ ≥ 0
 11: -21.0x₁x₂ + 3.0x₁x₂x₃ ≥ 0
 12: -20.0x₁x₂ + 3.0x₁x₂x₃ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -41,9 +45,11 @@ end
 
 @testset "Example 6.2" begin
     DynamicPolynomials.@polyvar x[1:3]
-    prob = roundproblem(x[1]^4 * x[2]^2 + x[1]^2 * x[2]^4 + x[3]^6 - 3prod(x .^ 2) + sum(x .^ 4), nonneg=[sum(x .^ 2)-1],
-        tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(x[1]^4 * x[2]^2 + x[1]^2 * x[2]^4 + x[3]^6 - 3prod(x .^ 2) + sum(x .^ 4), nonneg=[sum(x .^ 2)-1],
+            tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: x₃⁴ + x₂⁴ + x₁⁴ + x₃⁶ - 3.0x₁²x₂²x₃² + x₁²x₂⁴ + x₁⁴x₂²
 4 equality constraints
 1: 4.0x₁³ - 4.0x₁x₃⁴ - 6.0x₁x₂²x₃² - 2.0x₁x₂⁴ + 4.0x₁³x₂² - 4.0x₁⁵ - 6.0x₁x₃⁶ + 18.0x₁³x₂²x₃² - 6.0x₁³x₂⁴ - 6.0x₁⁵x₂² = 0
@@ -53,6 +59,7 @@ Objective: x₃⁴ + x₂⁴ + x₁⁴ + x₃⁶ - 3.0x₁²x₂²x₃² + x₁�
 2 nonnegative constraints
 5: -1.0 + x₃² + x₂² + x₁² ≥ 0
 6: 2.0x₃⁴ + 2.0x₂⁴ + 2.0x₁⁴ + 3.0x₃⁶ - 9.0x₁²x₂²x₃² + 3.0x₁²x₂⁴ + 3.0x₁⁴x₂² ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -64,9 +71,11 @@ end
 
 @testset "Example 6.3" begin
     DynamicPolynomials.@polyvar x[1:4]
-    prob = roundproblem(x[1]*x[2] + x[2]*x[3] + x[3]*x[4] - 3prod(x) + sum(x .^ 3),
-        nonneg=[x..., 1 - x[1] - x[2], 1 - x[3] - x[4]], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(x[1]*x[2] + x[2]*x[3] + x[3]*x[4] - 3prod(x) + sum(x .^ 3),
+            nonneg=[x..., 1 - x[1] - x[2], 1 - x[3] - x[4]], tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
 Objective: x₃x₄ + x₂x₃ + x₁x₂ + x₄³ + x₃³ + x₂³ + x₁³ - 3.0x₁x₂x₃x₄
 6 equality constraints
 01: x₁x₂ - x₁x₂x₃ - 2.0x₁²x₂ + 3.0x₁³ - 3.0x₁x₂x₃x₄ - 3.0x₁x₂³ - 3.0x₁⁴ + 6.0x₁²x₂x₃x₄ = 0
@@ -88,6 +97,7 @@ Objective: x₃x₄ + x₂x₃ + x₁x₂ + x₄³ + x₃³ + x₂³ + x₁³ - 
 16: x₃ + 3.0x₄² - 2.0x₃x₄ - x₂x₃ - 3.0x₄³ - 3.0x₃³ - 3.0x₁x₂x₃ + 6.0x₁x₂x₃x₄ ≥ 0
 17: -x₂x₃ - 2.0x₁x₂ - 3.0x₂³ - 3.0x₁³ + 6.0x₁x₂x₃x₄ ≥ 0
 18: -2.0x₃x₄ - x₂x₃ - 3.0x₄³ - 3.0x₃³ + 6.0x₁x₂x₃x₄ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -99,8 +109,11 @@ end
 
 @testset "Example 6.4" begin
     DynamicPolynomials.@polyvar x[1:2]
-    prob = roundproblem(x[1]^2 + 50.0x[2]^2, nonneg=[x[1]^2-.5, x[2]^2-2x[1]*x[2]-.125, x[2]^2+2x[1]*x[2]-0.125], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 2 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(x[1]^2 + 50.0x[2]^2, nonneg=[x[1]^2-.5, x[2]^2-2x[1]*x[2]-.125, x[2]^2+2x[1]*x[2]-0.125],
+            tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 2 variables
 Objective: 50.0x₂² + x₁²
 5 equality constraints
 01: 2.0x₁ + 18.4x₁x₂² - 0.8x₁³ - 26035.2x₁x₂⁴ + 323.2x₁³x₂² - 6.4x₁⁵ + 11520.0x₁x₂⁶ + 230.4x₁³x₂⁴ = 0
@@ -115,6 +128,7 @@ Objective: 50.0x₂² + x₁²
 09: -10.0x₂² + 0.4x₁² + 80.0x₂⁴ - 160.0x₁²x₂² + 3.2x₁⁴ ≥ 0
 10: 220.0x₂² - 0.4x₁x₂ + 3.2x₁² - 160.0x₂⁴ - 6468.8x₁x₂³ + 320.0x₁²x₂² + 0.8x₁³x₂ - 6.4x₁⁴ + 2880.0x₁x₂⁵ + 57.6x₁³x₂³ ≥ 0
 11: 220.0x₂² + 0.4x₁x₂ + 3.2x₁² - 160.0x₂⁴ + 6468.8x₁x₂³ + 320.0x₁²x₂² - 0.8x₁³x₂ - 6.4x₁⁴ - 2880.0x₁x₂⁵ - 57.6x₁³x₂³ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -126,9 +140,11 @@ end
 
 @testset "Example 6.5" begin
     DynamicPolynomials.@polyvar x[1:3]
-    prob = roundproblem(sum(x .^ 3) + 4prod(x) - (x[1]*(x[2]^2+x[3]^2) + x[2]*(x[3]^2+x[1]^2) + x[3]*(x[1]^2+x[2]^2)),
-        nonneg=[x[1], x[1]*x[2]-1, x[2]*x[3]-1], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(sum(x .^ 3) + 4prod(x) - (x[1]*(x[2]^2+x[3]^2) + x[2]*(x[3]^2+x[1]^2) + x[3]*(x[1]^2+x[2]^2)),
+            nonneg=[x[1], x[1]*x[2]-1, x[2]*x[3]-1], tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: x₃³ - x₂x₃² - x₂²x₃ + x₂³ - x₁x₃² + 4.0x₁x₂x₃ - x₁x₂² - x₁²x₃ - x₁²x₂ + x₁³
 5 equality constraints
 01: -x₃² - 2.0x₂x₃ + 3.0x₂² + 4.0x₁x₃ - 2.0x₁x₂ - x₁² - 3.0x₃⁴ + 2.0x₂x₃³ + x₂²x₃² + 5.0x₁x₃³ - 5.0x₁x₂x₃² + x₁x₂²x₃ - 3.0x₁x₂³ - x₁²x₃² + 2.0x₁²x₂² - x₁³x₃ + x₁³x₂ = 0
@@ -143,6 +159,7 @@ Objective: x₃³ - x₂x₃² - x₂²x₃ + x₂³ - x₁x₃² + 4.0x₁x₂x
 09: -x₃² + 4.0x₂x₃ - x₂² - 2.0x₁x₃ - 2.0x₁x₂ + 3.0x₁² + 3.0x₂x₃³ - x₂²x₃² + x₂³x₃ - 3.0x₂⁴ - 2.0x₁x₂x₃² + 2.0x₁x₂³ - x₁²x₂x₃ + x₁²x₂² ≥ 0
 10: -3.0x₃³ + x₂x₃² - x₂²x₃ + 3.0x₂³ + 2.0x₁x₃² - 2.0x₁x₂² + x₁²x₃ - x₁²x₂ ≥ 0
 11: 3.0x₃³ - 2.0x₂x₃² - x₂²x₃ - 2.0x₁x₃² + 4.0x₁x₂x₃ - x₁²x₃ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -156,9 +173,11 @@ end
 @testset "Example 6.6" begin
     DynamicPolynomials.@polyvar x[1:4]
     X(i) = i == 0 ? 1 : x[i]
-    prob = roundproblem(sum(x .^ 2) + sum(prod(i == j ? 1 : X(i) - X(j) for j in 0:4) for i in 0:4), nonneg=x.^2 .- 1,
-        tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(sum(x .^ 2) + sum(prod(i == j ? 1 : X(i) - X(j) for j in 0:4) for i in 0:4), nonneg=x.^2 .- 1,
+            tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
 Objective: 1.0 - x₄ - x₃ - x₂ - x₁ + x₄² + x₃x₄ + x₃² + x₂x₄ + x₂x₃ + x₂² + x₁x₄ + x₁x₃ + x₁x₂ + x₁² - x₄³ + x₃x₄² + x₃²x₄ - x₃³ + x₂x₄² - 3.0x₂x₃x₄ + x₂x₃² + x₂²x₄ + x₂²x₃ - x₂³ + x₁x₄² - 3.0x₁x₃x₄ + x₁x₃² - 3.0x₁x₂x₄ - 3.0x₁x₂x₃ + x₁x₂² + x₁²x₄ + x₁²x₃ + x₁²x₂ - x₁³ + x₄⁴ - x₃x₄³ - x₃³x₄ + x₃⁴ - x₂x₄³ + x₂x₃x₄² + x₂x₃²x₄ - x₂x₃³ + x₂²x₃x₄ - x₂³x₄ - x₂³x₃ + x₂⁴ - x₁x₄³ + x₁x₃x₄² + x₁x₃²x₄ - x₁x₃³ + x₁x₂x₄² - 3.0x₁x₂x₃x₄ + x₁x₂x₃² + x₁x₂²x₄ + x₁x₂²x₃ - x₁x₂³ + x₁²x₃x₄ + x₁²x₂x₄ + x₁²x₂x₃ - x₁³x₄ - x₁³x₃ - x₁³x₂ + x₁⁴
 8 equality constraints
 01: -1.0 + x₄ + x₃ + x₂ + 2.0x₁ + x₄² - 3.0x₃x₄ + x₃² - 3.0x₂x₄ - 3.0x₂x₃ + x₂² + 2.0x₁x₄ + 2.0x₁x₃ + 2.0x₁x₂ - 2.0x₁² - x₄³ + x₃x₄² + x₃²x₄ - x₃³ + x₂x₄² - 3.0x₂x₃x₄ + x₂x₃² + x₂²x₄ + x₂²x₃ - x₂³ + 2.0x₁x₃x₄ + 2.0x₁x₂x₄ + 2.0x₁x₂x₃ - 4.0x₁²x₄ - 4.0x₁²x₃ - 4.0x₁²x₂ + 2.0x₁³ - x₁²x₄² + 3.0x₁²x₃x₄ - x₁²x₃² + 3.0x₁²x₂x₄ + 3.0x₁²x₂x₃ - x₁²x₂² - 2.0x₁³x₄ - 2.0x₁³x₃ - 2.0x₁³x₂ + 3.0x₁⁴ + x₁²x₄³ - x₁²x₃x₄² - x₁²x₃²x₄ + x₁²x₃³ - x₁²x₂x₄² + 3.0x₁²x₂x₃x₄ - x₁²x₂x₃² - x₁²x₂²x₄ - x₁²x₂²x₃ + x₁²x₂³ - 2.0x₁³x₃x₄ - 2.0x₁³x₂x₄ - 2.0x₁³x₂x₃ + 3.0x₁⁴x₄ + 3.0x₁⁴x₃ + 3.0x₁⁴x₂ - 4.0x₁⁵ = 0
@@ -178,6 +197,7 @@ Objective: 1.0 - x₄ - x₃ - x₂ - x₁ + x₄² + x₃x₄ + x₃² + x₂x�
 14: -0.5x₂ + 0.5x₂x₄ + 0.5x₂x₃ + x₂² + 0.5x₁x₂ + 0.5x₂x₄² - 1.5x₂x₃x₄ + 0.5x₂x₃² + x₂²x₄ + x₂²x₃ - 1.5x₂³ - 1.5x₁x₂x₄ - 1.5x₁x₂x₃ + x₁x₂² + 0.5x₁²x₂ - 0.5x₂x₄³ + 0.5x₂x₃x₄² + 0.5x₂x₃²x₄ - 0.5x₂x₃³ + x₂²x₃x₄ - 1.5x₂³x₄ - 1.5x₂³x₃ + 2.0x₂⁴ + 0.5x₁x₂x₄² - 1.5x₁x₂x₃x₄ + 0.5x₁x₂x₃² + x₁x₂²x₄ + x₁x₂²x₃ - 1.5x₁x₂³ + 0.5x₁²x₂x₄ + 0.5x₁²x₂x₃ - 0.5x₁³x₂ ≥ 0
 15: -0.5x₃ + 0.5x₃x₄ + x₃² + 0.5x₂x₃ + 0.5x₁x₃ + 0.5x₃x₄² + x₃²x₄ - 1.5x₃³ - 1.5x₂x₃x₄ + x₂x₃² + 0.5x₂²x₃ - 1.5x₁x₃x₄ + x₁x₃² - 1.5x₁x₂x₃ + 0.5x₁²x₃ - 0.5x₃x₄³ - 1.5x₃³x₄ + 2.0x₃⁴ + 0.5x₂x₃x₄² + x₂x₃²x₄ - 1.5x₂x₃³ + 0.5x₂²x₃x₄ - 0.5x₂³x₃ + 0.5x₁x₃x₄² + x₁x₃²x₄ - 1.5x₁x₃³ - 1.5x₁x₂x₃x₄ + x₁x₂x₃² + 0.5x₁x₂²x₃ + 0.5x₁²x₃x₄ + 0.5x₁²x₂x₃ - 0.5x₁³x₃ ≥ 0
 16: -0.5x₄ + x₄² + 0.5x₃x₄ + 0.5x₂x₄ + 0.5x₁x₄ - 1.5x₄³ + x₃x₄² + 0.5x₃²x₄ + x₂x₄² - 1.5x₂x₃x₄ + 0.5x₂²x₄ + x₁x₄² - 1.5x₁x₃x₄ - 1.5x₁x₂x₄ + 0.5x₁²x₄ + 2.0x₄⁴ - 1.5x₃x₄³ - 0.5x₃³x₄ - 1.5x₂x₄³ + x₂x₃x₄² + 0.5x₂x₃²x₄ + 0.5x₂²x₃x₄ - 0.5x₂³x₄ - 1.5x₁x₄³ + x₁x₃x₄² + 0.5x₁x₃²x₄ + x₁x₂x₄² - 1.5x₁x₂x₃x₄ + 0.5x₁x₂²x₄ + 0.5x₁²x₃x₄ + 0.5x₁²x₂x₄ - 0.5x₁³x₄ ≥ 0"
+    end
     if optimize
         :MosekSOS ∈ solvers && @test poly_optimize(:MosekSOS, prob, 4).objective ≈ 4 atol = 2e-7
         :COPTMoment ∈ solvers && @test poly_optimize(:COPTMoment, prob, 4).objective ≈ 4 atol = 1e-6
@@ -186,9 +206,11 @@ end
 
 @testset "Example 6.7" begin
     DynamicPolynomials.@polyvar x[1:3]
-    prob = roundproblem(x[1]^4 * x[2]^2 + x[2]^4 * x[3]^2 + x[3]^4 * x[1]^2 - 3prod(x .^ 2) + x[2]^2,
-        nonneg=[x[1] - x[2]*x[3], -x[2] + x[3]^2], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(x[1]^4 * x[2]^2 + x[2]^4 * x[3]^2 + x[3]^4 * x[1]^2 - 3prod(x .^ 2) + x[2]^2,
+            nonneg=[x[1] - x[2]*x[3], -x[2] + x[3]^2], tighter=true)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 3 variables
 Objective: x₂² + x₂⁴x₃² + x₁²x₃⁴ - 3.0x₁²x₂²x₃² + x₁⁴x₂²
 3 equality constraints
 1: 4.0x₂x₃ + 2.0x₂⁴x₃ + 4.0x₁²x₃³ - 6.0x₁²x₂²x₃ + 8.0x₂³x₃³ + 2.0x₁x₂x₃⁴ - 6.0x₁x₂³x₃² - 12.0x₁²x₂x₃³ + 4.0x₁³x₂³ + 4.0x₁⁴x₂x₃ + 4.0x₁x₃⁶ - 12.0x₁x₂²x₃⁴ + 8.0x₁³x₂²x₃² = 0
@@ -199,6 +221,7 @@ Objective: x₂² + x₂⁴x₃² + x₁²x₃⁴ - 3.0x₁²x₂²x₃² + x₁
 5: -x₂ + x₃² ≥ 0
 6: 2.0x₁x₃⁴ - 6.0x₁x₂²x₃² + 4.0x₁³x₂² ≥ 0
 7: -2.0x₂ - 4.0x₂³x₃² + 6.0x₁²x₂x₃² - 2.0x₁⁴x₂ - 2.0x₁x₃⁵ + 6.0x₁x₂²x₃³ - 4.0x₁³x₂²x₃ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -216,9 +239,11 @@ end
     # x₁ = x₂ = x₃ = smallest root of -9 + 9x + 4x^3 ≈ 0.7850032632
     # x₄ = smallest root of -125 + 75x + 12x^3 ≈ 1.308338772
     DynamicPolynomials.@polyvar x[1:4]
-    prob = roundproblem(sum(x[i]^2 * (x[i] - x[4])^2 + (x[i] - 1)^2 for i in 1:3) +
-        2x[1]*x[2]*x[3]*(x[1] + x[2] + x[3] - 2x[4]), nonneg=[x[1] - x[2], x[2] - x[3]], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem(sum(x[i]^2 * (x[i] - x[4])^2 + (x[i] - 1)^2 for i in 1:3) +
+            2x[1]*x[2]*x[3]*(x[1] + x[2] + x[3] - 2x[4]), nonneg=[x[1] - x[2], x[2] - x[3]], tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
 Objective: 3.0 - 2.0x₃ - 2.0x₂ - 2.0x₁ + x₃² + x₂² + x₁² + x₃²x₄² - 2.0x₃³x₄ + x₃⁴ + x₂²x₄² - 2.0x₂³x₄ + x₂⁴ - 4.0x₁x₂x₃x₄ + 2.0x₁x₂x₃² + 2.0x₁x₂²x₃ + x₁²x₄² + 2.0x₁²x₂x₃ - 2.0x₁³x₄ + x₁⁴
 4 equality constraints
 1: -6.0 + 2.0x₃ + 2.0x₂ + 2.0x₁ + 2.0x₃x₄² - 6.0x₃²x₄ + 4.0x₃³ + 2.0x₂x₄² - 4.0x₂x₃x₄ + 2.0x₂x₃² - 6.0x₂²x₄ + 2.0x₂²x₃ + 4.0x₂³ + 2.0x₁x₄² - 4.0x₁x₃x₄ + 2.0x₁x₃² - 4.0x₁x₂x₄ + 12.0x₁x₂x₃ + 2.0x₁x₂² - 6.0x₁²x₄ + 2.0x₁²x₃ + 2.0x₁²x₂ + 4.0x₁³ = 0
@@ -230,6 +255,7 @@ Objective: 3.0 - 2.0x₃ - 2.0x₂ - 2.0x₁ + x₃² + x₂² + x₁² + x₃²
 6: -x₃ + x₂ ≥ 0
 7: -2.0 + 2.0x₁ - 4.0x₂x₃x₄ + 2.0x₂x₃² + 2.0x₂²x₃ + 2.0x₁x₄² + 4.0x₁x₂x₃ - 6.0x₁²x₄ + 4.0x₁³ ≥ 0
 8: 2.0 - 2.0x₃ - 2.0x₃x₄² + 6.0x₃²x₄ - 4.0x₃³ + 4.0x₁x₂x₄ - 4.0x₁x₂x₃ - 2.0x₁x₂² - 2.0x₁²x₂ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
@@ -241,8 +267,11 @@ end
 
 @testset "Example 6.9" begin
     DynamicPolynomials.@polyvar x[1:4]
-    prob = roundproblem((sum(x) +1)^2 - 4*(x[1]*x[2] + x[2]*x[3] + x[3]*x[4] + x[4] + x[1]), nonneg=[x; 1 .- x], tighter=true)
-    @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
+    local prob
+    for method in tightening_methods
+        prob = roundproblem((sum(x) +1)^2 - 4*(x[1]*x[2] + x[2]*x[3] + x[3]*x[4] + x[4] + x[1]), nonneg=[x; 1 .- x],
+            tighter=method)
+        @test strRep(prob) == "Real-valued polynomial optimization problem in 4 variables
 Objective: 1.0 - 2.0x₄ + 2.0x₃ + 2.0x₂ - 2.0x₁ + x₄² - 2.0x₃x₄ + x₃² + 2.0x₂x₄ - 2.0x₂x₃ + x₂² + 2.0x₁x₄ + 2.0x₁x₃ - 2.0x₁x₂ + x₁²
 8 equality constraints
 01: -2.0x₁ + 2.0x₁x₄ + 2.0x₁x₃ - 2.0x₁x₂ + 4.0x₁² - 2.0x₁²x₄ - 2.0x₁²x₃ + 2.0x₁²x₂ - 2.0x₁³ = 0
@@ -270,6 +299,7 @@ Objective: 1.0 - 2.0x₄ + 2.0x₃ + 2.0x₂ - 2.0x₁ + x₄² - 2.0x₃x₄ + 
 22: -2.0x₂ - 2.0x₂x₄ + 2.0x₂x₃ - 2.0x₂² + 2.0x₁x₂ ≥ 0
 23: -2.0x₃ + 2.0x₃x₄ - 2.0x₃² + 2.0x₂x₃ - 2.0x₁x₃ ≥ 0
 24: 2.0x₄ - 2.0x₄² + 2.0x₃x₄ - 2.0x₂x₄ - 2.0x₁x₄ ≥ 0"
+    end
     if optimize
         for solver in solvers
             @testset let solver=solver
