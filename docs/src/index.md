@@ -5,10 +5,18 @@ It builds on `MultivariatePolynomials` to provide a concise interface for the sp
 directly control the problem's sparsity using correlative sparsity, (chordal) term sparsity, and a combination of both. It also
 supports complex-valued problems and positive semidefinite constraints, and allows to extract solutions even for sparse
 problems.
-It _directly_ interfaces the solvers [Mosek](https://www.mosek.com/) (version 10 strongly preferred, less features available
-with version 9), [COSMO](https://oxfordcontrol.github.io/COSMO.jl/stable/),
-and [Hypatia](https://github.com/chriscoey/Hypatia.jl), without using `JuMP`. Despite `JuMP` being very performant for a
-modelling framework, it introduces a significant overhead that is omitted in this way.
+It provides a solver interface specifically designed for the optimization problems arising in polynomial optimization. This
+interface makes it easy to implement new solvers. On purpose, `MathOptInterface`/`JuMP` is not employed; despite `JuMP` being
+very performant for a modelling framework, it introduces a significant overhead that is omitted in this way.
+The following solvers are supported:
+- [Clarabel](https://github.com/oxfordcontrol/Clarabel.jl)
+- [COPT](https://www.shanshu.ai/copt)
+- [Hypatia](https://github.com/jump-dev/Hypatia.jl)
+- [Mosek](https://www.mosek.com/)
+- [SCS](https://github.com/cvxgrp/scs)
+It also features a pure Julia implementation of the large-scale
+[primal SpectralBundle method](https://doi.org/10.48550/arXiv.2307.07651) by Liao et al. and an interface to the nonlinear
+[LANCELOT](https://github.com/ralna/GALAHAD) solver.
 
 ## Overview
 ```@contents

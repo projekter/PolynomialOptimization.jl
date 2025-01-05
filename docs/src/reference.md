@@ -4,82 +4,87 @@
 CurrentModule = PolynomialOptimization
 ```
 
+# Optimization reference
+This reference page lists all functions that are relevant for polynomial optimization.
+
 ## Problem definition
 ```@docs
-PolyOptProblem
-poly_problem
-newton_polytope
-EqualityMethod
+Problem
+poly_problem(::P) where {P<:AbstractPolynomialLike}
 variables
 nvariables
-degree
-length
 isreal
 ```
 
-## Optimization
+## Relaxations
+Types and functions related to relaxations of polynomial optimization problems are found in the submodule `Relaxation`. The
+types in this module are mostly not exported, so that a qualified name is required.
+```@meta
+CurrentModule = PolynomialOptimization.Relaxation
+```
 ```@docs
-sparse_optimize
-poly_optimize
+AbstractRelaxation
+poly_problem(::AbstractRelaxation)
+basis
+MultivariatePolynomials.degree(::AbstractRelaxation)
+groupings
+iterate!(::AbstractRelaxation)
+Core.Type(::Problem, ::Tuple{Vararg{Any}})
+RelaxationGroupings
 ```
 
-## Working with problem solutions
-All functions listed here requires that the problem be optimized before.
+### Relaxations based on a global basis
 ```@docs
-poly_solutions
-poly_solutions_heuristic
-poly_all_solutions
-poly_solution_badness
-optimality_certificate
-moment_matrix
-last_moments
+AbstractRelaxationBasis
+Dense
+Newton
+Custom
 ```
 
-## Sparsity
+### Relaxations based on individual sparsity
 ```@docs
-SparseAnalysisState
-SparsityNone
+AbstractRelaxationSparse
 SparsityCorrelative
 SparsityTerm
 SparsityTermBlock
-SparsityTermCliques
+SparsityTermChordal
 SparsityCorrelativeTerm
-sparse_iterate!
-sparse_groupings
-sparse_problem
 TermMode
+CliqueMerged
+iterate!(::SparsityTerm)
 ```
 
-## Chordal graphs
+## Optimization and problem solutions
+```@meta
+CurrentModule = PolynomialOptimization
+```
 ```@docs
-chordal_completion!
-chordal_cliques!
+poly_optimize(::Val, ::AbstractRelaxation)
+poly_optimize(::Val, ::Problem, ::Vararg{Any})
+poly_optimize(::Result)
+Solver.RepresentationMethod
+RepresentationPSD
+RepresentationSDD
+RepresentationDD
+RepresentationIAs
+Result
+issuccess(::Result)
+poly_problem(::Result)
+optimality_certificate
+poly_all_solutions
+poly_solutions
+poly_solution_badness
+moment_matrix
+MomentVector
+MomentAssociation
+SOSCertificate
+sos_matrix
+IterateRepresentation
 ```
 
-
-## FastVector
-To improve the speed in some implementation details, `PolynomialOptimization` provides a "fast" vector type. This is basically
-just a wrapper around the stdlib `Vector`; however, it actually takes proper advantage of sizehints. The fact that Julia does
-this badly has been known for quite some time ([#24909](https://github.com/JuliaLang/julia/issues/24909)), but the default
-implementation has not changed. Our own `FastVec` is a bit more specific than the
-[PushVector](https://github.com/tpapp/PushVectors.jl), but also allows for more aggressive optimization.
+## Newton polytope construction (manually)
+Note that using these functions is usually not necessary; construct a [`Newton`](@ref Relaxation.Newton) relaxation instead.
 ```@docs
-FastVec
-Base.sizehint!(::FastVec, ::Integer)
-prepare_push!
-Base.push!(::FastVec{V}, el) where {V}
-unsafe_push!
-Base.append!(::FastVec{V}, ::AbstractVector) where {V}
-unsafe_append!
-Base.prepend!(::FastVec{V}, ::AbstractVector) where {V}
-unsafe_prepend!
-Base.similar(::FastVec{V}) where {V}
-finish!
-```
-
-## Lancelot
-`PolynomialOptimization` provides an interface to LANCELOT. This is only temporary, as the GALAHAD developers are developing
-Julia interfaces themselves (in fact, this is already there - but LANCELOT is the only part that not even has a C interface).
-```@docs
-LANCELOT_simple
+Newton.halfpolytope
+Newton.halfpolytope_from_file
 ```
