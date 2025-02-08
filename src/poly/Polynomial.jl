@@ -115,30 +115,32 @@ SimplePolynomial(p::AbstractPolynomialLike, args...; kwargs...) = SimplePolynomi
 
 function (p::SimplePolynomial{C,Nr,Nc})(values::AbstractVector{V}) where {C,V,Nr,Nc}
     if length(values) == Nr + 2Nc
-        all(v -> v[1] == conj(v[2]), zip(@view(values[Nr+1:Nr+Nc]), @view(values[Nr+Nc+1:end]))) ||
+        all(v -> v[1] == conj(v[2]), zip(@view(values[begin+Nr:begin+Nr+Nc-1]), @view(values[begin+Nr+Nc:end]))) ||
             throw(ArgumentError("Conjugate values did not match conjugate of their actual values"))
     else
         length(values) == Nr + Nc || throw(ArgumentError("Invalid number of values"))
     end
-    T = promote_type(C, V)
-    result = zero(T)
-    real_values = @view(values[1:Nr])
-    complex_values = @view(values[Nr+1:Nr+Nc])
-    # This is not StaticPolynomials - we are interested in evaluating the polynomials, but only once or few times, so the
-    # effort of generating efficient code is not really worth it.
-    for t in p
-        val = T(coefficient(t))
-        for (var, pow) in monomial(t)
-            idx = variable_index(var)
-            if isreal(var)
-                val *= real_values[idx]^pow
-            elseif isconj(var)
-                val *= conj(complex_values[idx])^pow
-            else
-                val *= complex_values[idx]^pow
+    @inbounds begin
+        T = promote_type(C, V)
+        result = zero(T)
+        real_values = @view(values[begin:begin+Nr-1])
+        complex_values = @view(values[begin+Nr:begin+Nr+Nc-1])
+        # This is not StaticPolynomials - we are interested in evaluating the polynomials, but only once or few times, so the
+        # effort of generating efficient code is not really worth it.
+        for t in p
+            val = T(coefficient(t))
+            for (var, pow) in monomial(t)
+                idx = variable_index(var)
+                if isreal(var)
+                    val *= real_values[idx]^pow
+                elseif isconj(var)
+                    val *= conj(complex_values[idx])^pow
+                else
+                    val *= complex_values[idx]^pow
+                end
             end
+            result += val
         end
-        result += val
     end
     return result
 end

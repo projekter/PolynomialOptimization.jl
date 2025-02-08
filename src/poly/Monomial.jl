@@ -414,6 +414,33 @@ Base.isreal(m::SimpleConjMonomial) = isreal(parent(m)) # iteration for the ordin
 # collisions should occur in this way.
 Base.hash(m::SimpleMonomialOrConj, h::UInt) = hash(m.index, h)
 
+@inline function (m::SimpleMonomialOrConj{Nr,Nc})(values::AbstractVector{V}) where {V,Nr,Nc}
+    @boundscheck begin
+        if length(values) == Nr + 2Nc
+            all(v -> v[1] == conj(v[2]), zip(@view(values[begin+Nr:begin+Nr+Nc-1]), @view(values[begin+Nr+Nc:end]))) ||
+                throw(ArgumentError("Conjugate values did not match conjugate of their actual values"))
+        else
+            length(values) == Nr + Nc || throw(ArgumentError("Invalid number of values"))
+        end
+    end
+    @inbounds begin
+        result = one(V)
+        real_values = @view(values[begin:begin+Nr-1])
+        complex_values = @view(values[begin+Nr:begin+Nr+Nc-1])
+        for (var, pow) in m
+            idx = variable_index(var)
+            if isreal(var)
+                result *= real_values[idx]^pow
+            elseif isconj(var)
+                result *= conj(complex_values[idx])^pow
+            else
+                result *= complex_values[idx]^pow
+            end
+        end
+    end
+    return m isa SimpleConjMonomial ? conj(result) : result
+end
+
 effective_variables_in(m::SimpleMonomial, in) = all(vp -> ordinary_variable(vp[1]) ∈ in, m)
 
 """
