@@ -466,7 +466,7 @@ end
     @test strRep(sp) == "Relaxation.SparsityCorrelativeTerm of a polynomial optimization problem
 > Clique #1: x[1], x[2]
   PSD block sizes:
-    [6 => 1, 3 => 1]
+    [6 => 2]
 > Clique #2: x[3]
   PSD block sizes:
     [2 => 1, 1 => 1]"

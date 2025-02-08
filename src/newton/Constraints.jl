@@ -53,7 +53,7 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
     # prefactors have lots of entries), but it is not so harmful in the other regime.
 
     # Out of necessity, our groupings contain abstract types. Given that the number of groupings will be manageable, but the
-    # groupings themselves can be quite small, it pays off to introduce a function barrier specializing on the actual type.
+    # groupings themselves can be quite large, it pays off to introduce a function barrier specializing on the actual type.
     grouping_loop = @capture(((grouping, monₜ, ::Val{constr_is_real}) where {constr_is_real}) -> begin
         if !iszero(Nc)
             monₜe = KillConjugates{Nr}(exponents(monₜ))
@@ -118,8 +118,7 @@ function merge_constraints(objective::SimplePolynomial{<:Any,Nr,Nc}, zero::Abstr
     isempty(psd) || @verbose_info("├ PSD constraints")
     for (groupings, psdᵢ) in zip(groupings.psds, psd)
         dim = size(psdᵢ, 1)
-        newbound = sum(∘(trisize, length), groupings.psds) * sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j),
-                                                                 init=0)
+        newbound = sum(∘(trisize, length), groupings) * sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0)
         sizehint!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : 2newbound))
         @inbounds for j in 1:dim, i in 1:j
             for t in psdᵢ[i, j]

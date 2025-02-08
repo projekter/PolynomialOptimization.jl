@@ -257,9 +257,14 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
             l = length(grouping)
             cliquesize[l] = get!(cliquesize, l, 0) +1
         end
-        for constrs in (groups.nonnegs, groups.psds), constr in constrs, grouping in constr
+        for constr in groups.nonnegs, grouping in constr
             cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
             l = length(grouping)
+            cliquesize[l] = get!(cliquesize, l, 0) +1
+        end
+        for (constr, constr_mat) in zip(groups.psds, poly_problem(x).constr_psd), grouping in constr
+            cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
+            l = length(grouping) * size(constr_mat, 1)
             cliquesize[l] = get!(cliquesize, l, 0) +1
         end
         for (i, (va, size_psd, size_lin)) in enumerate(zip(groups.var_cliques, cliquesizes_psd, cliquesizes_lin))
@@ -273,10 +278,11 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
             print(io, "\n  ", join(va, ", "))
         end
         bs = StatsBase.countmap(length.(groups.obj))
-        for constrs in (groups.nonnegs, groups.psds)
-            for constr in constrs
-                mergewith!(+, bs, StatsBase.countmap(length.(constr)))
-            end
+        for constr in groups.nonnegs
+            mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+        end
+        for (constr, constr_mat) in zip(groups.psds, poly_problem(x).constr_psd)
+            mergewith!(+, bs, StatsBase.countmap(length.(constr) .* size(constr_mat, 1)))
         end
         print(io, "\nPSD block sizes:\n  ", sort!(collect(bs), rev=true))
         if !isempty(groups.zeros)

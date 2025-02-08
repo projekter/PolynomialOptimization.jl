@@ -8,10 +8,17 @@
 It builds on `MultivariatePolynomials` to provide a concise interface for the specification of the problem and allows to apply
 many kinds of sparsity methods. It also fully supports complex-valued problems and positive semidefinite constraints and allows
 to extract solutions even for sparse problems.
-It _directly_ interfaces the solvers [Clarabel](https://github.com/oxfordcontrol/Clarabel.jl),
-[COPT](https://www.shanshu.ai/copt), [Hypatia](https://github.com/jump-dev/Hypatia.jl), [Mosek](https://www.mosek.com/), and
+It _directly_ interfaces the solvers
+[Clarabel](https://github.com/oxfordcontrol/Clarabel.jl),
+[COPT](https://www.shanshu.ai/copt),
+[Hypatia](https://github.com/jump-dev/Hypatia.jl),
+[Mosek](https://www.mosek.com/),
+[ProxSDP](https://github.com/mariohsouto/ProxSDP.jl), and
 [SCS](https://github.com/cvxgrp/scs) without using `JuMP`, avoiding this bottleneck so that indeed almost all the time is spent
-in the solver, not in the problem formulation.
+in the solver, not in the problem formulation. It also features new research-level solvers: an own implementation of the
+[primal spectral bundling](https://arxiv.org/abs/2307.07651v1) method and the [SketchyCGAL](https://doi.org/10.1137/19M1305045)
+algorithm; an efficiency-oriented refactoring of the low-rank solver [Loraine](https://github.com/kocvara/Loraine.jl),
+and an interface to the experimental [LoRADS](https://github.com/projekter/LoRADS) solver.
 
 ## About this branch
 This branch implements the [STRIDE solver](https://doi.org/10.1007/s10107-022-01912-6) and provides the `:STRIDE` algorithm

@@ -6,6 +6,9 @@ if isone(Threads.nthreads())
         @testset "Documentation" begin
             doctest(PolynomialOptimization)
         end
+        @testset "FastVector" begin
+            include("./FastVector.jl")
+        end
         @testset "SimplePolynomials" begin
             include("./SimplePolynomials.jl")
         end
@@ -14,6 +17,10 @@ if isone(Threads.nthreads())
         end
         @testset "no sparsity" begin
             include("./RelaxationDense.jl")
+        end
+        deleteat!(solvers, findfirst(==(:SpecBMSOS), solvers))
+        @testset "SOSCertificate" begin
+            include("./SOSCertificate.jl")
         end
         @testset "correlative sparsity" begin
             include("./RelaxationSparsityCorrelative.jl")
@@ -42,6 +49,9 @@ if isone(Threads.nthreads())
         end
         @testset "Lancelot" begin
             include("./Lancelot.jl")
+        end
+        @testset "SketchyCGAL solver based" begin
+            include("./SketchyCGAL.jl")
         end
     end
 else

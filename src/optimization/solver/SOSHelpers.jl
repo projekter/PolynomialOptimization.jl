@@ -30,7 +30,7 @@ for (newname, oldname) in (
     (:add_var_l1!, :add_constr_linf!), (:add_var_l1_complex!, :add_constr_linf_complex!),
     (:add_var_sdd!, :add_constr_sdddual!), (:add_var_sdd_complex!, :add_constr_sdddual_complex!),
     (:add_var_free_prepare!, :add_constr_fix_prepare!), (:add_var_free!, :add_constr_fix!),
-    (:add_var_free_finalize!, :add_constr_fix_finalize!), (:negate_free, :negate_fix),
+    (:add_var_free_finalize!, :add_constr_fix_finalize!), (:negate_free, :negate_fix), (:prepend_free, :prepend_fix),
     (:add_constr_slack!, :add_var_slack!),
     (:fix_constraints!, :fix_objective!),
     (:addtocounter!, :addtocounter!)

@@ -32,6 +32,20 @@ function add_var_nonnegative!(state::AbstractSolver{T,V}, iv::IndvalsIterator{T,
     return
 end
 
+"""
+    add_var_nonnegative!(state::AbstractSolver{<:Integer,V}, m::Int, n::Int,
+        data::SparseMatrixCOO{I,I,V}, obj::Tuple{FastVec{I},FastVec{V}}) where {I,V}
+
+This form of the function is called from [`primal_moment_setup!`](@ref). `m` is the number of total constraints, `n` the number
+of nonnegative variables; and the linear constraint matrix is given by `data`. The variables should be put into the objective
+according to `obj`. Note that the indices in `data` will have an offset as defined by the [`psd_indextype`](@ref), while the
+indices in `obj` take their offset from [`objective_indextype`](@ref).
+
+See also [`coo_to_csc!`](@ref coo_to_csc!(::Integer, ::SparseMatrixCOO{I,I,V,offset}) where {I,V,offset})
+"""
+add_var_nonnegative!(::AbstractSolver{<:Integer,V}, ::Int, ::Int, ::SparseMatrixCOO{I,I,V},
+    ::Tuple{FastVec{I},FastVec{V}}) where {I,V}
+
 function add_var_quadratic! end
 
 @doc raw"""
@@ -106,6 +120,57 @@ This method is called if [`psd_indextype`](@ref) returns a [`PSDIndextypeVector`
     If the solver natively supports complex-valued PSD cones, [`add_var_psd_complex!`](@ref) must be implemented.
 """
 add_var_psd!(::AbstractSolver{T,V}, ::Int, ::IndvalsIterator{T,V}) where {T,V}
+
+"""
+    add_var_psd!(state::AbstractSolver{<:Integer,V}, m::Int, dim::I,
+        data::SparseMatrixCOO{I,I,V},
+        obj::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+
+This form of the function is called from [`primal_moment_setup!`](@ref) when both the [`psd_indextype`](@ref) and the
+[`objective_indextype`](@ref) are of type [`PSDIndextypeCOOVectorized`](@ref). Note that the triangles or scaling factors are
+allowed to be different. `m` is the number of constraints in the problem, and the first index in `data` always corresponds to
+the constraint index. The matrix also takes part in the objective unless the `obj` parameter is `nothing`.
+
+There are various possible variations in which the data can be passed, as documented for the following functions.
+
+See also [`coo_to_csc!`](@ref coo_to_csc!(::Integer, ::SparseMatrixCOO{I,I,V,offset}) where {I,V,offset})
+"""
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::SparseMatrixCOO{I,I,V},
+    ::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+
+"""
+    add_var_psd!(state::AbstractSolver{<:Integer,V}, m::Int, dim::I,
+        data::SparseMatrixCOO{I,I,V},
+        obj::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
+
+This form of the function is called from [`primal_moment_setup!`](@ref) when the [`psd_indextype`](@ref) is a
+[`PSDIndextypeCOOVectorized`](@ref) and the [`objective_indextype`](@ref) is a [`PSDIndextypeMatrixCartesian`](@ref).
+"""
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::SparseMatrixCOO{I,I,V},
+    ::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
+
+"""
+    add_var_psd!(state::AbstractSolver{<:Integer,V}, m::Int, dim::I,
+        data::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
+        obj::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+
+This form of the function is called from [`primal_moment_setup!`](@ref) when the [`psd_indextype`](@ref) is a
+[`PSDIndextypeMatrixCartesian`](@ref) and the [`objective_indextype`](@ref) is a [`PSDIndextypeCOOVectorized`](@ref).
+"""
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
+    ::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+
+"""
+    add_var_psd!(state::AbstractSolver{<:Integer,V}, m::Int, dim::I,
+        data::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
+        obj::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
+
+This form of the function is called from [`primal_moment_setup!`](@ref) when both the [`psd_indextype`](@ref) and the
+[`objective_indextype`](@ref) are of type [`PSDIndextypeMatrixCartesian`](@ref). Note that the triangles are allowed to be
+different.
+"""
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}},
+    ::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
 
 function add_var_psd_complex! end
 
@@ -279,6 +344,20 @@ decomposition, may yield wrong values; then define this function to return `true
 negate_free(::AbstractSolver) = false
 
 """
+    prepend_free(::AbstractSolver)
+
+If this method yields `true` (default), free variables will be created before all others. If it is `false`, PSD (or
+nonnegative) variables will be created first.
+
+!!! info
+    Note that this does not imply a global order; if DD or SDD cones are used, free variables may still appear at an arbitrary
+    position. However, this method guarantees the order with respect to cones that will use the same monomial indices.
+"""
+prepend_free(::AbstractSolver) = true
+
+function fix_constraints! end
+
+"""
     fix_constraints!(state::AbstractSolver{T,V}, indvals::Indvals{T,V}) where {T,V}
 
 Ensures that all constraints in the optimization problem are fixed to the values according to `indvals`.
@@ -286,7 +365,16 @@ This function will be called exactly once by [`sos_setup!`](@ref) after all vari
 
 See also [`Indvals`](@ref).
 """
-function fix_constraints! end
+fix_constraints!(::AbstractSolver{T,V}, ::Indvals{T,V}) where {T,V}
+
+"""
+    fix_constraints(state::AbstractSolver{<:Integer,V}, m::Int,
+        indvals::Indvals{I,V}) where {I,V}
+
+Ensures that all constraints in the optimization problem are fixed to the values according to `indvals`.
+This form of the function is called from [`primal_moment_setup!`](@ref). `m` is the number of constraints in the solver.
+"""
+fix_constraints!(::AbstractSolver{<:Integer,V}, ::Int, ::Indvals{<:Integer,V}) where {V}
 
 """
     add_constr_slack!(state::AbstractSolver{T}, num::Int)

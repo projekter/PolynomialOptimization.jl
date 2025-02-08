@@ -26,7 +26,7 @@ Solver.supports_lnorm_complex(::StateMoment) = true
 
 Solver.supports_psd_complex(::StateMoment) = true
 
-Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
+Solver.psd_indextype(::StateMoment{<:Integer,V}) where {V} = PSDIndextypeVector(:U, sqrt(V(2)))
 
 Solver.negate_fix(::StateMoment) = true
 
@@ -152,4 +152,4 @@ Solver.extract_sos(::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}
 Solver.extract_sos(::AbstractRelaxation, (state, solver)::Tuple{StateMoment,Any}, ::Val{:fix}, index::AbstractUnitRange,
     ::Nothing) = @view(Solvers.get_y(solver)[index])
 
-Solver.psd_indextype(::Tuple{StateMoment,Any}) = PSDIndextypeVector(:U)
+Solver.psd_indextype(::Tuple{StateMoment{<:Integer,V},Any}) where {V} = PSDIndextypeVector(:U, sqrt(V(2)))

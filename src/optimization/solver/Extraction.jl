@@ -72,8 +72,8 @@ relations should hold:
     no other cones interspersed.
 
 [^1]: If the return type is a vector, [`psd_indextype`](@ref) should be defined on `state`, and it must return a
-      [`PSDIndextypeVector`](@ref). However, the scaling operation on the off-diagonals is now inverted: To go from the vector
-      of the triangle to the full matrix, off-diagonals must be scaled by ``\\frac{1}{\\sqrt2}``.
+      [`PSDIndextypeVector`](@ref). The `scaling` property of the index type will automatically be inverted, so that what was
+      ``\\sqrt2`` before now becomes ``\\frac{1}{\\sqrt2}``.
 [^2]: Complex values can be treated either by returning a vector of `Complex` element type, or by returning a real-valued
       vector where the diagonals (PSD/DD/SDD)/first elements (``\\ell``-norm) have a single entry and off-diagonals two.
 """

@@ -54,10 +54,11 @@ function poly_optimize(@nospecialize(v::Val), relaxation::AbstractRelaxation; ve
                                        # was constructed.
         if verbose
             bs = StatsBase.countmap(length.(groups.obj))
-            @unroll for constrs in (groups.nonnegs, groups.psds)
-                for constr in constrs
-                    mergewith!(+, bs, StatsBase.countmap(length.(constr)))
-                end
+            for constr in groups.nonnegs
+                mergewith!(+, bs, StatsBase.countmap(length.(constr)))
+            end
+            for (constr, constr_mat) in zip(groups.psds, poly_problem(relaxation).constr_psd)
+                mergewith!(+, bs, StatsBase.countmap(length.(constr) .* size(constr_mat, 1)))
             end
             print("PSD block sizes:\n  ", sort!(collect(bs), rev=true))
             if !isempty(groups.zeros)

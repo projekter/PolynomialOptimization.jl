@@ -162,7 +162,6 @@ The current example is an unconstrained optimization problem; hence, the size of
 than actually necessary. It is not a simple problem to determine the relevant basis elements in general; but unconstrained
 problems allow for the Newton polytope technique. To use it, we first need to load a supported solver for the Newton polytope,
 then we simply explicitly construct the [`Newton`](@ref Relaxation.Newton) relaxation object:
-to [`poly_problem`](@ref):
 ```jldoctest walkthrough
 julia> import Mosek
 

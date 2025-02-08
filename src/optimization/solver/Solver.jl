@@ -93,5 +93,6 @@ include("./SOSHelpers.jl")
 include("./MomentHelpers.jl")
 include("./AbstractAPISolver.jl")
 include("./AbstractSparseMatrixSolver.jl")
+include("./PrimalMomentHelpers.jl")
 
 end

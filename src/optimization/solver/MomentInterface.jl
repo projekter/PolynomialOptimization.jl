@@ -1,6 +1,6 @@
 export add_constr_nonnegative!, add_constr_rotated_quadratic!, add_constr_quadratic!, add_constr_linf!,
     add_constr_linf_complex!, add_constr_psd!, add_constr_psd_complex!, add_constr_dddual!, add_constr_dddual_complex!,
-    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, negate_fix, fix_objective!, add_var_slack!
+    add_constr_fix_prepare!, add_constr_fix!, add_constr_fix_finalize!, negate_fix, prepend_fix, fix_objective!, add_var_slack!
 
 function add_constr_nonnegative! end
 
@@ -282,6 +282,19 @@ decomposition, may yield wrong values; then define this function to return `true
 with opposite sign.
 """
 negate_fix(::AbstractSolver) = false
+
+"""
+    prepend_fix(::AbstractSolver)
+
+If this method yields `true` (default), fixed constraints will be created before all others. If it is `false`, PSD (or
+nonnegative) constraints will be created first.
+
+!!! info
+    Note that this does not imply a global order; if DD or SDD cones are used, fixed constraints may still appear at an
+    arbitrary position. However, this method guarantees the order with respect to cones that will use the same monomial
+    indices.
+"""
+prepend_fix(::AbstractSolver) = true
 
 """
     fix_objective!(state, indvals::Indvals)

@@ -25,7 +25,7 @@ Solver.issuccess(::Val{:SCSMoment}, status::Integer) = isone(status)
 
 Solver.supports_quadratic(::StateMoment) = true
 
-Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
+Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L, sqrt(2.))
 
 Solver.negate_fix(::StateMoment) = true
 
@@ -186,4 +186,4 @@ Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val
 Solver.extract_sos(::AbstractRelaxation, state::Tuple{StateMoment,Vararg}, ::Val{:psd}, index::AbstractUnitRange, ::Nothing) =
     view(state[3][4], index)
 
-Solver.psd_indextype(::Tuple{StateMoment,Vararg}) = PSDIndextypeVector(:L)
+Solver.psd_indextype(::Tuple{StateMoment,Vararg}) = PSDIndextypeVector(:L, sqrt(2.))

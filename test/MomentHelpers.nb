@@ -15175,14 +15175,14 @@ if type === :moment_linear\n        states = (MomentSolverSetup(instance, \
 linear=true),)\n    elseif type === :moment_rquadratic\n        states = \
 (MomentSolverSetup(instance, rquadratic=true),)\n    elseif type === \
 :moment_psdr\n        states = (MomentSolverSetup(instance, \
-psd=PSDIndextypeVector(:L)),\n                  MomentSolverSetup(instance, \
-psd=PSDIndextypeVector(:U)),\n                  MomentSolverSetup(instance, \
+psd=PSDIndextypeVector(:L, sqrt2)),\n                  MomentSolverSetup(instance, \
+psd=PSDIndextypeVector(:U, sqrt2)),\n                  MomentSolverSetup(instance, \
 psd=PSDIndextypeVector(:F)),\n                  MomentSolverSetup(instance, \
 psd=PSDIndextypeMatrixCartesian(:L, 17)),\n                  \
 MomentSolverSetup(instance, psd=PSDIndextypeMatrixCartesian(:U, 17)))\n    \
 elseif type === :moment_psdc\n        states = (MomentSolverSetup(instance, \
-psd=PSDIndextypeVector(:L), complex=true),\n                  \
-MomentSolverSetup(instance, psd=PSDIndextypeVector(:U), complex=true),\n      \
+psd=PSDIndextypeVector(:L, sqrt2), complex=true),\n                  \
+MomentSolverSetup(instance, psd=PSDIndextypeVector(:U, sqrt2), complex=true),\n      \
             MomentSolverSetup(instance, psd=PSDIndextypeVector(:F), \
 complex=true),\n                  MomentSolverSetup(instance, \
 psd=PSDIndextypeMatrixCartesian(:L, \>\"", "<>", 
@@ -15201,7 +15201,7 @@ constraint, type)\n    ud = Diagonal(1:100)\n    uf = reshape(1:100^2, 100, \
 100)\n    udc = Diagonal(reinterpret(reshape, Complex{Int}, reshape(1:200, 2, \
 100)))\n    ufc = reinterpret(reshape, Complex{Int}, reshape(1:2*100^2, 2, \
 100, 100))\n    if type === :sos_ddr\n        states = \
-(SOSSolverSetup(instance; dd=PSDIndextypeVector(:U), complex=true, \
+(SOSSolverSetup(instance; dd=PSDIndextypeVector(:U, sqrt2), complex=true, \
 representation=Solver.RepresentationDD(complex=false)),\n                  \
 SOSSolverSetup(instance; l1=true, representation=Solver.RepresentationDD()),\n\
                   SOSSolverSetup(instance; linear=true, \
@@ -15223,7 +15223,7 @@ representation=Solver.RepresentationDD(LowerTriangular(uf))),\n               \
    SOSSolverSetup(instance +4; linear=true, \
 representation=Solver.RepresentationDD(LowerTriangular(uf))))\n    elseif \
 type === :sos_ddc\n        states = (SOSSolverSetup(instance; \
-dd=PSDIndextypeVector(:U), complex=true, \
+dd=PSDIndextypeVector(:U, sqrt2), complex=true, \
 representation=Solver.RepresentationDD()),\n                  \
 SOSSolverSetup(instance; l1=true, complex=true, \
 representation=Solver.RepresentationDD()),\n                  \
@@ -15246,7 +15246,7 @@ representation=Solver.RepresentationDD(LowerTriangular(ufc))),\n              \
     SOSSolverSetup(instance +4; quadratic=true, \
 representation=Solver.RepresentationDD(LowerTriangular(ufc))))\n    elseif \
 type === :sos_sddr\n        states = (SOSSolverSetup(instance, \
-sdd=PSDIndextypeVector(:U), \
+sdd=PSDIndextypeVector(:U, sqrt2), \
 representation=Solver.RepresentationSDD(complex=false)),\n                  \
 SOSSolverSetup(instance, rquadratic=true, \
 representation=Solver.RepresentationSDD(complex=false)),\n                  \
@@ -15269,7 +15269,7 @@ representation=Solver.RepresentationSDD(LowerTriangular(uf), complex=false)),\
 \n                  SOSSolverSetup(instance +4, quadratic=true, \
 representation=Solver.RepresentationSDD(LowerTriangular(uf), complex=false)))\
 \n    elseif type === :sos_sddc\n        states = (SOSSolverSetup(instance, \
-sdd=PSDIndextypeVector(:U), complex=true, \
+sdd=PSDIndextypeVector(:U, sqrt2), complex=true, \
 representation=Solver.RepresentationSDD()),\n                  \
 SOSSolverSetup(instance, rquadratic=true, complex=true, \
 representation=Solver.RepresentationSDD()),\n                  \

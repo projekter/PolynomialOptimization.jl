@@ -1,4 +1,4 @@
-export AbstractSparseMatrixSolver, SparseMatrixCOO, coo_to_csc!
+export AbstractSparseMatrixSolver, coo_to_csc!
 
 """
     AbstractSparseMatrixSolver{I<:Integer,K<:Integer,V<:Real}
@@ -25,30 +25,6 @@ end
 
 # necessary as SOS helper, as the state could also be a SOS state
 Solver.add_constr_slack!(state::AbstractSparseMatrixSolver{<:Integer}, num::Int) = add_var_slack!(state, num)
-
-"""
-    SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
-
-Representation of a sparse matrix in COO form. Fields are `rowinds::FastVec{I}`, `moninds::FastVec{K}` (where `K` is of the
-type returned by `monomial_index`), and `nzvals::FastVec{V}`. The first row/column for the solver has index `Offset` (of type
-`I`).
-"""
-struct SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
-    rowinds::FastVec{I}
-    moninds::FastVec{K}
-    nzvals::FastVec{V}
-
-    function SparseMatrixCOO{I,K,V,Offset}() where {I<:Integer,K<:Integer,V<:Real,Offset}
-        Offset isa I || throw(MethodError(SparseMatrixCOO{I,K,V,Offset}, ()))
-        new{I,K,V,Offset}(FastVec{I}(), FastVec{K}(), FastVec{V}())
-    end
-end
-
-Base.length(smc::SparseMatrixCOO) = length(smc.rowinds)
-@inline function Base.size(smc::SparseMatrixCOO{<:Integer,<:Integer,<:Real,Offset}, dim) where {Offset}
-    dim == 1 || error("Not implemented")
-    @inbounds return isempty(smc.rowinds) ? 0 : Int(smc.rowinds[end]) + (1 - Int(Offset))
-end
 
 function FastVector.prepare_push!(smc::SparseMatrixCOO, new_items::Integer)
     prepare_push!(smc.rowinds, new_items)

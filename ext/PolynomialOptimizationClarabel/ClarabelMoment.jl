@@ -18,7 +18,7 @@ Solver.issuccess(::Val{:ClarabelMoment}, status::Clarabel.SolverStatus) = status
 
 Solver.supports_quadratic(::StateMoment) = true
 
-Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:U)
+Solver.psd_indextype(::StateMoment{<:Integer,V}) where {V} = PSDIndextypeVector(:U, sqrt(V(2)))
 
 @counter_alias(StateMoment, Any, :nonnegative)
 
@@ -106,4 +106,4 @@ Solver.extract_moments(relaxation::AbstractRelaxation, (state, solution)::Tuple{
 Solver.extract_sos(relaxation::AbstractRelaxation, (state, solution)::Tuple{StateMoment,Any}, type::Val,
     index::AbstractUnitRange, ::Nothing) = @view(solution.z[index])
 
-Solver.psd_indextype(::Tuple{StateMoment,Any}) = PSDIndextypeVector(:U)
+Solver.psd_indextype(::Tuple{StateMoment{<:Integer,V},Any}) where {V} = PSDIndextypeVector(:U, sqrt(V(2)))

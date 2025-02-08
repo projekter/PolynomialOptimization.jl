@@ -119,9 +119,21 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
         T = eltype(data)
         if !complex || T <: Complex
             if itype isa Solver.PSDIndextypeVector{:U}
-                data = SPMatrix(ddim, data, :US)
+                if isone(itype.scaling)
+                    data = SPMatrix(dim, data, :U)
+                elseif itype.scaling^2 ≈ 2
+                    data = SPMatrix(ddim, data, :US)
+                else
+                    error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
+                end
             elseif itype isa Solver.PSDIndextypeVector{:L}
-                data = SPMatrix(ddim, data, :LS)
+                if isone(itype.scaling)
+                    data = SPMatrix(dim, data, :L)
+                elseif itype.scaling^2 ≈ 2
+                    data = SPMatrix(ddim, data, :LS)
+                else
+                    error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
+                end
             else
                 itype::Solver.PSDIndextypeVector{:F}
                 data = reshape(data, ddim, ddim)
@@ -143,7 +155,13 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
                         newdataptr += copylen + 2sizeof(T)
                         dataptr += copylen + sizeof(T)
                     end
-                    return SPMatrix(dim, newdata, :LS)
+                    if isone(itype.scaling)
+                        return SPMatrix(dim, newdata, :L)
+                    elseif itype.scaling^2 ≈ 2
+                        return SPMatrix(dim, newdata, :LS)
+                    else
+                        error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted.")
+                    end
                 else
                     @inbounds for j in 1:dim
                         copylen = 2j -1 # 2(j -1) complex values above diagonal + real part of diagonal
@@ -157,7 +175,13 @@ function sos_matrix(relaxation::AbstractRelaxation, state, dim::Int, type::Type,
                             dataptr += (2dim -1) * sizeof(T)
                         end
                     end
-                    return SPMatrix(dim, newdata, itype isa Solver.PSDIndextypeVector{:U} ? :US : :U)
+                    if itype isa Solver.PSDIndextypeVector{:F} || isone(itype.scaling)
+                        return SPMatrix(dim, newdata, :U)
+                    elseif itype.scaling^2 ≈ 2
+                        return SPMatrix(dim, newdata, :US)
+                    else
+                        error("Unsupported: only off-diagonal scalings with the values 1 or √2 are permitted")
+                    end
                 end
             end
         end

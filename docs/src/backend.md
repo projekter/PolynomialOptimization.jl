@@ -46,7 +46,7 @@ with the appropriate `Val`-wrapped solver method as its first parameter. However
 setup such as creating the solver object in this function and delegate all the work of setting up the actual problem to
 [`moment_setup!`](@ref) or [`sos_setup!`](@ref).
 In order to do so, a solver implementation should create a new type that contains all the relevant data during setup of the
-problem. Usually, a solver falls in one of two categories:
+problem. Usually, a solver falls in one of three categories:
 - Problem data has to be supplied in matrix/vector form; in this case, the new type should be a descendant of
   [`AbstractSparseMatrixSolver`](@ref). Usually, open-source solvers fall in this category.
 - Problem data is constructed incrementally via various calls to API functions of the solver, which does not provide access to
@@ -109,7 +109,7 @@ AbstractSparseMatrixSolver
 SparseMatrixCOO
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::Indvals{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
 append!(::SparseMatrixCOO{I,K,V,Offset}, ::IndvalsIterator{K,V}) where {I<:Integer,K<:Integer,V<:Real,Offset}
-coo_to_csc!
+coo_to_csc!(::Union{SparseMatrixCOO{I,K,V,Offset},<:Tuple{AbstractVector{K},AbstractVector{V}}}...) where {I<:Integer,K<:Integer,V<:Real,Offset}
 MomentVector(::AbstractRelaxation{<:Problem{<:SimplePolynomial{<:Any,Nr,Nc}}}, ::Vector{V}, ::K, ::SparseMatrixCOO{<:Integer,K,V,Offset}, ::SparseMatrixCOO{<:Integer,K,V,Offset}...) where {Nr,Nc,K<:Integer,V<:Real,Offset}
 ```
 
@@ -142,9 +142,12 @@ supports_sdd_complex
 PSDIndextype
 PSDIndextypeMatrixCartesian
 PSDIndextypeVector
+PSDIndextypeCOOVectorized
 psd_indextype
 negate_fix
 negate_free
+prepend_fix
+prepend_free
 ```
 
 #### Working with data from the interface
@@ -195,10 +198,12 @@ sos_add_equality!
 
 The following methods (or a subset as previously indicated) must be implemented.
 ```@docs
-add_var_nonnegative!
+add_var_nonnegative!(::AbstractSolver{T,V}, ::Indvals{T,V}) where {T,V}
+add_var_nonnegative!(::AbstractSolver{T,V}, ::IndvalsIterator{T,V}) where {T,V}
 add_var_rotated_quadratic!
 add_var_quadratic!
-add_var_psd!
+add_var_psd!(::AbstractSolver{T,V}, ::Int, ::PSDMatrixCartesian{T,V}) where {T,V}
+add_var_psd!(::AbstractSolver{T,V}, ::Int, ::IndvalsIterator{T,V}) where {T,V}
 add_var_psd_complex!
 add_var_dd!
 add_var_dd_complex!
@@ -213,6 +218,31 @@ fix_constraints!
 add_constr_slack!
 ```
 
+#### Interface for the moment optimization in primal form
+A very particular case is if the moment optimization should be done using semidefinite variables that the solver allows to
+define, but only as a single variable (not as a cone in which to put variables); this is the primal form, most suitable for SOS
+optimizations. However, there can be a good reason to use the primal form for moment optimizations instead: namely, if the
+solver can exploit a low-rank assumptions on this matrix. In this case, `poly_optimize` should call
+[`primal_moment_setup!`](@ref) instead:
+```@docs
+primal_moment_setup!
+```
+
+The following methods must be implemented:
+```@docs
+add_var_nonnegative!(::AbstractSolver{<:Integer,V}, ::Int, ::Int, ::SparseMatrixCOO{I,I,V}, ::Tuple{FastVec{I},FastVec{V}}) where {I,V}
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::SparseMatrixCOO{I,I,V}, ::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::SparseMatrixCOO{I,I,V}, ::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}}, ::Union{Nothing,Tuple{FastVec{I},FastVec{V}}}) where {I,V}
+add_var_psd!(::AbstractSolver{<:Integer,V}, ::Int, ::I, ::Tuple{FastVec{I},Tuple{FastVec{I},FastVec{I}},FastVec{V}}, ::Union{Nothing,Tuple{Tuple{FastVec{I},FastVec{I}},FastVec{V}}}) where {I,V}
+fix_constraints!(::AbstractSolver{<:Integer,V}, ::Int, ::Indvals{<:Integer,V}) where {V}
+objective_indextype
+```
+Note that these methods work with the COO representation, which can be quickly converted to either CSR or CSC using
+[`coo_to_csr!`](@ref) and [`coo_to_csc!`](@ref coo_to_csc!(::Integer, ::SparseMatrixCOO{I,I,V,offset}) where {I,V,offset}),
+which respects the offset desired by the solver. Only this interface allows to set [`psd_indextype`](@ref) to a
+[`PSDIndextypeCOOVectorized`](@ref); but [`PSDIndextypeVector`](@ref) is now forbidden.
+
 #### Helper functions
 The solver module exports a number of helper functions which may be of use in implementations:
 ```@docs
@@ -220,6 +250,8 @@ The solver module exports a number of helper functions which may be of use in im
 monomial_count
 trisize
 count_uniques
+coo_to_csc!(::Integer, ::SparseMatrixCOO{I,I,V,offset}) where {I,V,offset}
+coo_to_csr!
 ```
 Additionally, `Solver` reexports a number of useful types and functions for developing the interface (see
 `src/optimization/solver/Solver.jl`); therefore, usually only the `Solver` submodule itself has to be used and not

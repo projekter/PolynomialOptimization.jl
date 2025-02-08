@@ -28,7 +28,7 @@ end
 
 Solver.supports_rotated_quadratic(::StateMoment) = true
 
-Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L)
+Solver.psd_indextype(::StateMoment) = PSDIndextypeVector(:L, sqrt(2.))
 
 @counter_alias(StateMoment, :nonnegative, :fix)
 @counter_atomic(StateMoment, :quadratic)

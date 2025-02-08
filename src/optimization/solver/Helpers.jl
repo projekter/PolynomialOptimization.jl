@@ -1,4 +1,4 @@
-export monomial_count, trisize, count_uniques
+export monomial_count, trisize, count_uniques, SparseMatrixCOO
 
 """
     monomial_count(n, d)
@@ -209,4 +209,40 @@ function count_uniques(vec₁::AbstractVector{I}, vec₂::AbstractVector{I}, cal
         index += 1
     end
     return index -1 # return the count
+end
+
+"""
+    SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
+
+Representation of a sparse matrix in COO form. Fields are `rowinds::FastVec{I}`, `moninds::FastVec{K}` (where `K` is of the
+type returned by `monomial_index`), and `nzvals::FastVec{V}`. The first row/column for the solver has index `Offset` (of type
+`I`).
+
+If this matrix is used in the context of a vectorized COO matrix, the fields are `rows`, `cols`, and `vals` with `K === I`.
+"""
+struct SparseMatrixCOO{I<:Integer,K<:Integer,V<:Real,Offset}
+    rowinds::FastVec{I}
+    moninds::FastVec{K}
+    nzvals::FastVec{V}
+
+    function SparseMatrixCOO{I,K,V,Offset}() where {I<:Integer,K<:Integer,V<:Real,Offset}
+        Offset isa I || throw(MethodError(SparseMatrixCOO{I,K,V,Offset}, ()))
+        new{I,K,V,Offset}(FastVec{I}(), FastVec{K}(), FastVec{V}())
+    end
+
+    SparseMatrixCOO(rows::FastVec{I}, cols::FastVec{I}, vals::FastVec{V}, offset::I) where {I,V<:Real} =
+        new{I,I,V,offset}(rows, cols, vals)
+end
+
+function Base.getproperty(smc::SparseMatrixCOO, f::Symbol)
+    (f === :rows || f === :rowinds) && return getfield(smc, :rowinds)
+    (f === :cols || f === :moninds) && return getfield(smc, :moninds)
+    (f === :vals || f === :nzvals) && return getfield(smc, :nzvals)
+    return getfield(smc, f)
+end
+
+Base.length(smc::SparseMatrixCOO) = length(smc.rowinds)
+@inline function Base.size(smc::SparseMatrixCOO{<:Integer,<:Integer,<:Real,Offset}, dim) where {Offset}
+    dim == 1 || error("Not implemented")
+    @inbounds return isempty(smc.rowinds) ? 0 : Int(smc.rowinds[end]) + (1 - Int(Offset))
 end

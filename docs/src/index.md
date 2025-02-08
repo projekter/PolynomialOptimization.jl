@@ -12,18 +12,16 @@ The following solvers are supported:
 - [Clarabel](https://github.com/oxfordcontrol/Clarabel.jl)
 - [COPT](https://www.shanshu.ai/copt)
 - [Hypatia](https://github.com/jump-dev/Hypatia.jl)
+- [Loraine](https://github.com/kocvara/Loraine.jl) (own implementation)
+- [LoRADS](https://github.com/projekter/LoRADS)
+- [LANCELOT](https://github.com/ralna/GALAHAD) (not based on relaxations)
 - [Mosek](https://www.mosek.com/)
+- [ProxSDP](https://github.com/mariohsouto/ProxSDP.jl)
 - [SCS](https://github.com/cvxgrp/scs)
-It also features a pure Julia implementation of the large-scale
-[primal SpectralBundle method](https://doi.org/10.48550/arXiv.2307.07651) by Liao et al. and an interface to the nonlinear
-[LANCELOT](https://github.com/ralna/GALAHAD) solver.
+- [Sketchy CGAL](https://doi.org/10.1137/19M1305045) (own implementation)
+- [SpecBM Primal](https://doi.org/10.48550/arXiv.2307.07651) (own implementation)
 
 ## Overview
 ```@contents
 Depth=3
-```
-
-## Index
-```@index
-Modules=[PolynomialOptimization]
 ```
