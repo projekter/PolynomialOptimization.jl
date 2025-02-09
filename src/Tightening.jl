@@ -1,8 +1,23 @@
-function tighten!(objective::P, variables::AbstractVector{V}, degree::Int, zero::AbstractVector{P}, nonneg::AbstractVector{P},
-    equality_method::AbstractVector{EqualityMethod}; verbose::Bool) where {P,V}
+const tightening_methods = Symbol[]
+
+function default_tightening_method()
+    isempty(tightening_methods) &&
+        error("No tightening method is available. Load a solver package that provides such a method (e.g., Mosek)")
+    @inbounds return tightening_methods[begin]
+end
+
+"""
+    tighten_minimize_l1(V, spmat::SparseMatrixCSC, rhs::Vector)
+
+Computes a solution to the underdetermined linear system `spmat * x = rhs` with minimal ℓ₁-norm.
+"""
+function tighten_minimize_l1 end
+
+function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero::AbstractVector{P}, nonneg::AbstractVector{P};
+    verbose::Bool=false) where {P,V}
     # We apply Nie's method of Lagrange multipliers. This means that we add two additional functions φ and ψ that are made up
     # of particular polynomials. We first need to calculate those polynomials.
-    @assert(coefficient_type(P) == Float64)
+    coefficient_type(P) == Float64 || error("Tightening requires Float64 coefficient type")
     ∇f = differentiate.((objective,), variables)
     if !isempty(zero) || !isempty(nonneg)
         ∇zero = [differentiate.((z,), variables) for z in zero]
@@ -18,7 +33,7 @@ function tighten!(objective::P, variables::AbstractVector{V}, degree::Int, zero:
         # is size(C, 2) - rank(A) with coefficient matrix A. There is no a priori bound for higher-degree constraints, so
         # we just start with the degree bound given by the appropriate maximal degree in C and increase if necessary.
         # First check that we are not inconsistent.
-        @assert(rank((variables => rand(length(variables)),) .|> Cᵀ) == size(Cᵀ, 1), "Tightening is not possible")
+        rank((variables => rand(length(variables)),) .|> Cᵀ) == size(Cᵀ, 1) || error("Tightening is not possible")
         # For efficiency reasons, as everything is col-major, we do Cᵀ * Lᵀ instead.
         # (CᵀLᵀ)ᵢⱼ = ∑ₖ Cᵀᵢₖ Lᵀₖⱼ
         n = length(variables)
@@ -75,34 +90,7 @@ function tighten!(objective::P, variables::AbstractVector{V}, degree::Int, zero:
                         # We don't just want to solve the equation, but actually find the solution with minimal cardinality
                         # (the basic solution that SPQR returns does not necessarily satisfy this criterion!). As an
                         # approximation, we minimize the ℓ₁ norm.
-                        Mosek.maketask() do task
-                            len = size(spmat, 2)
-                            # For the ℓ₁ norm, we need the absolute values, so another len variables.
-                            Mosek.appendvars(task, 2len)
-                            Mosek.putvarboundsliceconst(task, 1, 2len +1, Mosek.MSK_BK_FR, -Inf, Inf)
-                            # Minimize the absolute values
-                            Mosek.putobjsense(task, Mosek.MSK_OBJECTIVE_SENSE_MINIMIZE)
-                            Mosek.putclist(task, collect(len+1:2len), collect(Iterators.repeated(1., len)))
-                            # Make sure the original variables satisfy spmat*x = rhs
-                            lensp = size(spmat, 1)
-                            Mosek.appendcons(task, lensp + 2len)
-                            Mosek.putacolslice(task, 1, len +1, spmat)
-                            Mosek.putconboundslice(task, 1, lensp +1, collect(Iterators.repeated(Mosek.MSK_BK_FX, lensp)),
-                                rhs, rhs)
-                            # And that the others are larger or equal to the absolute values.
-                            for (j, i) in enumerate(lensp+1:2:lensp+2len)
-                                Mosek.putarow(task, i, [j, j + len], [1.0, -1.0])
-                                Mosek.putarow(task, i +1, [j, j + len], [-1.0, -1.0])
-                            end
-                            Mosek.putconboundsliceconst(task, lensp +1, lensp + 2len +1, Mosek.MSK_BK_UP, -Inf, 0.0)
-                            Mosek.optimize(task)
-                            status = Mosek.getsolsta(task, Mosek.MSK_SOL_BAS)
-                            if status === Mosek.MSK_SOL_STA_OPTIMAL
-                                solution = Mosek.getxxslice(task, Mosek.MSK_SOL_BAS, 1, len +1)
-                            else
-                                throw(SingularException(0))
-                            end
-                        end
+                        solution = tighten_minimize_l1(method, spmat, rhs)
                     else
                         solution = spmat \ rhs
                     end
@@ -127,11 +115,6 @@ function tighten!(objective::P, variables::AbstractVector{V}, degree::Int, zero:
                 # particular column.
                 deg += 1
                 @verbose_info("Degree was insufficient: Creating ansatz with maxdegree ", deg)
-                if ((deg +1) >> 1) > degree
-                    # this is not even the most stringent warning. Since the polynomials are multiplied by ∇zero and
-                    # ∇nonneg, we should actually check for this maxdegree.
-                    error("Tightening led to polynomials of a higher degree than the relaxation level allows.")
-                end
                 if length(mons) ≤ deg # ensure the new monomials exist
                     @assert(length(mons) == deg)
                     push!(mons, monomials(variables, [deg]))
@@ -178,6 +161,7 @@ function tighten!(objective::P, variables::AbstractVector{V}, degree::Int, zero:
     # there might be useless constraints which we can immediately drop
     filter!(p -> !isconstant(p), φ) # we could assert on p ≃ 0
     append!(zero, φ)
-    append!(equality_method, Iterators.repeated(emSimple, length(φ)))
     return
 end
+
+tighten!(method::Symbol, args...; kwargs...) = tighten!(Val(method), args...; kwargs...)

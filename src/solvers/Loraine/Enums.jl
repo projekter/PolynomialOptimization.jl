@@ -1,0 +1,33 @@
+export PRECONDITIONER_NONE, PRECONDITIONER_HALPHA, PRECONDITIONER_HBETA, PRECONDITIONER_HYBRID,
+    VERBOSITY_NONE, VERBOSITY_SHORT, VERBOSITY_FULL,
+    AMAT_AᵀA, AMAT_DIAGAᵀA, AMAT_IDENTITY,
+    INITPOINT_LORAINE, INITPOINT_SDPT3,
+    STATUS_UNKNOWN, STATUS_OPTIMAL, STATUS_INFEASIBLE, STATUS_INFEASIBLE_OR_UNBOUNDED, STATUS_ITERATION_LIMIT, STATUS_NUMERICAL
+
+"""
+    Preconditioner
+
+- *per CG iteration*, `PRECONDITIONER_NONE` is faster (lower complexity) than `PRECONDITIONER_HBETA` which is faster than
+  `PRECONDITIONER_HALPHA`
+- *as a preconditioner*, `PRECONDITIONER_HALPHA` is better than `PRECONDITIONER_HBETA` is better than `PRECONDITIONER_NONE`, in
+  the sense of CG iterations needed to solve the linear system
+- some SDP problems are "easy", meaning that CG always converges without preconditioner (i.e.,
+  `preconditioner = PRECONDITIONER_NONE`), so it's always worth trying this option
+- `PRECONDITIONER_HYBRID` starts with (cheaper) `H_beta` and once it gets into difficulties, switches to `H_alpha`
+"""
+@enum Preconditioner PRECONDITIONER_NONE PRECONDITIONER_HALPHA PRECONDITIONER_HBETA PRECONDITIONER_HYBRID
+
+@enum Verbosity VERBOSITY_NONE VERBOSITY_SHORT VERBOSITY_FULL
+
+@enum AMat AMAT_AᵀA AMAT_DIAGAᵀA AMAT_IDENTITY
+
+@enum Initpoint INITPOINT_LORAINE INITPOINT_SDPT3
+
+@enum Status begin
+    STATUS_UNKNOWN
+    STATUS_OPTIMAL
+    STATUS_INFEASIBLE
+    STATUS_INFEASIBLE_OR_UNBOUNDED
+    STATUS_ITERATION_LIMIT
+    STATUS_NUMERICAL
+end
