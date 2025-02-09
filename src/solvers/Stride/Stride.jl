@@ -6,6 +6,7 @@ using ...PolynomialOptimization: @assert, @inbounds, @verbose_info, poly_problem
     Relaxation
 using ..Solvers: EfficientCholmod
 using ...Solver: MomentVector
+import Optim
 
 export stride_solve
 
@@ -37,10 +38,52 @@ function psdproject!(m::SPMatrix{R}) where {R}
     return packed_scale!(munscaled)
 end
 
+mutable struct PolyLBFGSState{R,S<:Optim.LBFGSState} <: Optim.AbstractOptimizerState
+    const state::S
+    const ssd::Data{R}
+    const tol::R
+    success::Bool
+end
+
+Optim.reset!(method, state::PolyLBFGSState, obj, x) = Optim.reset!(method, state.state, obj, x)
+Optim.update_state!(d, state::PolyLBFGSState, method::Optim.LBFGS) = Optim.update_state!(d, state.state, method)
+Optim.update_h!(d, state::PolyLBFGSState, method::Optim.LBFGS) = Optim.update_h!(d, state.state, method)
+Optim.trace!(tr, d, state::PolyLBFGSState, iteration, method::Optim.LBFGS, options, curr_time=time()) =
+    Optim.trace!(tr, d, state.state, iteration, method, options, curr_time)
+function Base.getproperty(state::PolyLBFGSState, prop::Symbol)
+    if prop === :state || prop === :ssd || prop === :tol || prop === :success
+        return getfield(state, prop)
+    else
+        return getproperty(getfield(state, :state), prop)
+    end
+end
+function Base.setproperty!(state::PolyLBFGSState, prop::Symbol, v)
+    if prop === :success
+        return setfield!(state, prop, v)
+    else
+        return setfield!(getfield(state, :state), prop, v)
+    end
+end
+
+function Optim.assess_convergence(state::PolyLBFGSState{R}, d, ::Optim.Options) where {R}
+    ssd = state.ssd
+    Astar, Z, W, ξ = ssd.Astar, ssd.X, ssd.S, state.state.x
+    for (Wᵢ, Zᵢ, Astarᵢ) in zip(W, Z, Astar)
+        copyto!(Wᵢ, Zᵢ)
+        mul!(Wᵢ, Astarᵢ, ξ, -one(R), -one(R))
+        psdproject!(Wᵢ)
+    end
+    # x_converged, f_converged, g_converged, f_increased - we disregard all this and use the criterion from Algorithm 6
+    state.success = converged = ηproj(ssd, W, ξ) ≤ state.tol
+    return converged, converged, converged, false
+end
+
 function stride_solve(ssd::Data{R}, relaxation::Relaxation.AbstractRelaxation, data; verbose::Bool=false,
     tol::R=1e-8, maxiter::Integer=10,
     tol_init::R=1e-4, maxiter_init::Integer=1000, verbose_init::Bool=false,
     tol_sgsapg::R=1e-12, maxiter_sgsapg::Integer=1000, verbose_sgsapg::Bool=false,
+    tol_lbfgs::R=1e-12, mem_lbfgs::Integer=10, maxiter_lbfgs::Integer=1000, verbose_lbfgs::Bool=false,
+    ls_lbfgs=Optim.LineSearches.MoreThuente(),
     σ::R=10.,
     verbose_local::Bool=false, kwargs_local::Dict=Dict(),
     opti_local=begin
@@ -100,6 +143,45 @@ function stride_solve(ssd::Data{R}, relaxation::Relaxation.AbstractRelaxation, d
             maximum(maxfn, groupings.psds, init=0)))
         sqrt2 = sqrt(R(2))
     end
+    local lbfgs_fg!
+    let Z=X, A=ssd.A, Astar=ssd.Astar, b=ssd.b
+        # ϕ(ξ) := ‖Π(A* ξ + Z)‖^2/2 - ⟨b, ξ⟩
+        # ∇ϕ(ξ) = AΠ(A* ξ + Z) - b
+        lbfgs_fg! = Optim.only_fg!((F, G, ξ) -> begin
+            ϕ = zero(R)
+            isnothing(G) || (G .= .-b)
+            for (i, (tmpmᵢ, Zᵢ, Aᵢ, Astarᵢ)) in enumerate(zip(tmpm, Z, A, Astar))
+                copyto!(tmpmᵢ, Zᵢ)
+                mul!(tmpmᵢ, Astarᵢ, ξ, true, true)
+                psdproject!(tmpmᵢ)
+                isnothing(F) || (ϕ += norm(tmpmᵢ)^2)
+                isnothing(G) || mul!(G, Aᵢ, tmpmᵢ, true, true)
+            end
+            isnothing(F) || return R(1/2)*ϕ - dot(b, ξ)
+            nothing
+        end)
+    end
+    lbfgs = Optim.LBFGS(m=mem_lbfgs, linesearch=ls_lbfgs)
+    lbfgs_options = Optim.Options(g_tol=tol_lbfgs, show_trace=verbose_lbfgs, show_every=50, iterations=maxiter_lbfgs)
+    lbfgs_d = Optim.OnceDifferentiable(lbfgs_fg!, y, zero(R))
+    lbfgs_state = PolyLBFGSState(Optim.LBFGSState(
+        y, # x
+        similar(y), # x_previous
+        similar(y), # g_previous
+        Vector{R}(undef, mem_lbfgs), # rho
+        [similar(y) for _ in 1:mem_lbfgs], # dx_history
+        [similar(y) for _ in 1:mem_lbfgs], # dg_history
+        fill(R(NaN), length(y)), # dx
+        fill(R(NaN), length(y)), # # dg
+        fill(R(NaN), length(y)), # u
+        R(NaN), # f_x_previous
+        similar(y), # twoloop_q
+        Vector{R}(undef, mem_lbfgs), # twoloop_alpha
+        0, # pseudo_iteration
+        similar(y), # s
+        similar(y), # x_ls
+        one(R)
+    ), ssd, tol_lbfgs, false)
 
     status = :max_iter
     σₖ = zero(R)
@@ -113,6 +195,21 @@ function stride_solve(ssd::Data{R}, relaxation::Relaxation.AbstractRelaxation, d
             axpy!(-σₖ, Cᵢ, Xᵢ)
         end
         sgsapg!(ssd, tol_sgsapg, maxiter_sgsapg, verbose_sgsapg)
+        verbose_lbfgs && @verbose_info("Entering limited-memory BFGS method")
+        # we have to duplicate the behavior of initial_state here
+        Optim.reset!(lbfgs, lbfgs_state, lbfgs_d, y)
+        copyto!(lbfgs_state.state.x_previous, y) # not strictly necessary (else it would be part of reset!)
+        lbfgs_state.success = false
+        Optim.optimize(lbfgs_d, y, lbfgs, lbfgs_options, lbfgs_state)
+        if !lbfgs_state.success
+            for (Wᵢ, Zᵢ, Astarᵢ) in zip(S, X, Astar)
+                copyto!(Wᵢ, Zᵢ)
+                mul!(Wᵢ, Astarᵢ, y, -one(R), -one(R))
+                psdproject!(Wᵢ)
+            end
+            ηproj(ssd, S, y) # to calculate X (which is stored in tmpm2)
+        end
+        # else checking the termination criteria already constructed the state
         # We got an updated y and S, now we have to construct X = Π(A*ξ + Z), where Z = Xₖ₋₁ - σₖ C ≡ X
 
         for (Xᵢ, Astarᵢ) in zip(X, Astar)
