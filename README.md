@@ -10,6 +10,7 @@ many kinds of sparsity methods. It also fully supports complex-valued problems a
 to extract solutions even for sparse problems.
 It _directly_ interfaces the solvers
 [Clarabel](https://github.com/oxfordcontrol/Clarabel.jl),
+[ConicBundle](https://www-user.tu-chemnitz.de/~helmberg/ConicBundle/Manual/index.html),
 [COPT](https://www.shanshu.ai/copt),
 [Hypatia](https://github.com/jump-dev/Hypatia.jl),
 [Mosek](https://www.mosek.com/),

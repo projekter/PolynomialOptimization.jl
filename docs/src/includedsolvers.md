@@ -16,6 +16,7 @@ number up or down by 100 or more. All solvers may expose options that can influe
 |  Solver     |                            Package                          |   License  | Methods       | Speed    | Accuracy | Memory  | max. recomm. basis size |
 | ------:     | :---------------------------------------------------------: | :--------: | :---------:   | :-----:  | :------: | :-----: | :---------------------- |
 | Clarabel    | [Clarabel.jl](https://github.com/oxfordcontrol/Clarabel.jl) | Apache     | moment        | 👍👍👍 | 👍👍👍 | 👍👍    | ~200                    |
+| ConicBundle | [ConicBundle.jl](https://github.com/projekter/ConicBundle.jl) | GPL3     | primal moment | n.a.     | n.a.    | 👍👍👍 |                         |
 | COPT        | [COPT.jl](https://github.com/COPT-Public/COPT.jl/tree/main) | commercial | moment        | 👍👍👍 | 👍👍👍 | 👍👍👍 | ~700                    |
 | Hypatia[^1] | [Hypatia.jl](https://github.com/jump-dev/Hypatia.jl)        | MIT        | moment        | 👍👍    | 👍👍   | 👍      | ~100                    |
 | LANCELOT[^2]| [GALAHAD.jl](https://github.com/ralna/GALAHAD/tree/master/GALAHAD.jl) | BSD | nonlinear  | n.a.     | n.a.    | 👍👍👍 | n.a.                    |
