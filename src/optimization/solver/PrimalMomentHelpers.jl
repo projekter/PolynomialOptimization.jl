@@ -86,13 +86,13 @@ end
     it::PSDIndextypeMatrixCartesian{:F}, max_con::I, i::I, j::I, v::V) where {I,V}
     if i == j
         push!(cooᵢ, max_con)
-        push!(cooⱼ[1], i)
-        push!(cooⱼ[2], j)
+        push!(cooₘₙ[1], i)
+        push!(cooₘₙ[2], j)
         push!(cooᵥ, v)
     else
         push!(cooᵢ, max_con, max_con)
-        push!(cooⱼ[1], i, j)
-        push!(cooⱼ[2], j, i)
+        push!(cooₘₙ[1], i, j)
+        push!(cooₘₙ[2], j, i)
         v *= inv(V(2)) # hard-coded scaling
         push!(cooᵥ, v)
     end
@@ -103,8 +103,8 @@ end
     it::PSDIndextypeMatrixCartesian, max_con::I, i::I, j::I, v::V) where {I,V}
     # the order is already correct
     push!(cooᵢ, max_con)
-    push!(cooⱼ[1], i)
-    push!(cooⱼ[2], j)
+    push!(cooₘₙ[1], i)
+    push!(cooₘₙ[2], j)
     push!(cooᵥ, i == j ? v : v * inv(V(2))) # hard-coded scaling
     return
 end
@@ -390,9 +390,9 @@ function add_constr_psd!(state::PrimalMomentSolver{I,K,V,C}, dim::Int, data::Ind
     max_con = state.max_con
     scaling = full || it isa PSDIndextypeMatrixCartesian ? -inv(V(2)) : -it.invscaling
     if !(C <: Tuple)
-        j = _get_offset(it) - one(I)
+        j::I = _get_offset(it) - one(I)
         if full
-            jtrans = _get_offset(it) - dim
+            jtrans::I = _get_offset(it) - dim
         end
     end
     @inbounds for indval in data
