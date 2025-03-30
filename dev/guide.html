@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Walkthrough · PolynomialOptimization.jl</title><meta name="title" content="Walkthrough · PolynomialOptimization.jl"/><meta property="og:title" content="Walkthrough · PolynomialOptimization.jl"/><meta property="twitter:title" content="Walkthrough · PolynomialOptimization.jl"/><meta name="description" content="Documentation for PolynomialOptimization.jl."/><meta property="og:description" content="Documentation for PolynomialOptimization.jl."/><meta property="twitter:description" content="Documentation for PolynomialOptimization.jl."/><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="search_index.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="index.html">PolynomialOptimization.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="index.html">Introduction</a></li><li class="is-active"><a class="tocitem" href="guide.html">Walkthrough</a><ul class="internal"><li><a class="tocitem" href="#A-simple-unconstrained-problem"><span>A simple unconstrained problem</span></a></li><li><a class="tocitem" href="#Constraints"><span>Constraints</span></a></li><li><a class="tocitem" href="#Complex-valued-problems"><span>Complex-valued problems</span></a></li></ul></li><li><a class="tocitem" href="reference.html">Reference</a></li><li><a class="tocitem" href="includedsolvers.html">Supported solvers</a></li><li><a class="tocitem" href="backend.html">Backend</a></li><li><a class="tocitem" href="auxreference.html">Reference of auxilliaries</a></li><li><a class="tocitem" href="intpolynomials.html">IntPolynomials</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="guide.html">Walkthrough</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="guide.html">Walkthrough</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/projekter/PolynomialOptimization.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/projekter/PolynomialOptimization.jl/blob/main/docs/src/guide.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Walkthrough"><a class="docs-heading-anchor" href="#Walkthrough">Walkthrough</a><a id="Walkthrough-1"></a><a class="docs-heading-anchor-permalink" href="#Walkthrough" title="Permalink"></a></h1><p>We start the Julia session by including the required packages.</p><pre><code class="language-julia-repl hljs">julia&gt; using PolynomialOptimization, DynamicPolynomials</code></pre><h2 id="A-simple-unconstrained-problem"><a class="docs-heading-anchor" href="#A-simple-unconstrained-problem">A simple unconstrained problem</a><a id="A-simple-unconstrained-problem-1"></a><a class="docs-heading-anchor-permalink" href="#A-simple-unconstrained-problem" title="Permalink"></a></h2><h3 id="Constructing-the-problem"><a class="docs-heading-anchor" href="#Constructing-the-problem">Constructing the problem</a><a id="Constructing-the-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Constructing-the-problem" title="Permalink"></a></h3><p>Next, we define some simple optimization problem.</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x[1:3];
+
+julia&gt; prob = poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2*x[2]^2 + x[1]^2*x[3]^2 + x[2]^2*x[3]^2 + x[2]*x[3])
+Real-valued polynomial optimization problem in 3 variables
+Objective: 1.0 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴</code></pre><p>This is a very simple problem: We have three variables and want to minimize an unconstrained objective function. Currently, <code>prob</code> is just an instance of a <a href="reference.html#PolynomialOptimization.Problem"><code>Problem</code></a>: some elementary checks and conversions have been done, but the heavy machinery of polynomial optimization was not applied yet. During the process of constructing the problem, it is possible to automatically perform modifications. These are available via keyword parameters of <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>.</p><h3 id="Densely-solving-the-problem"><a class="docs-heading-anchor" href="#Densely-solving-the-problem">Densely solving the problem</a><a id="Densely-solving-the-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Densely-solving-the-problem" title="Permalink"></a></h3><p>Since this problem is so small, we can solve it directly without any sparsity consideration. Note that <code>PolynomialOptimization</code> works with a variety of solvers; however, they are included only as weak dependencies. You have to load the appropriate solver Julia package first to make the solvers available. For a list of supported solvers, see the documentation for <a href="backend.html#PolynomialOptimization.Solver.poly_optimize-Tuple{Val, PolynomialOptimization.Relaxation.AbstractRelaxation, PolynomialOptimization.Relaxation.RelaxationGroupings}-backend"><code>poly_optimize</code></a> or the <a href="guide.html#details">details</a> section.</p><pre><code class="language-julia-repl hljs">julia&gt; import Clarabel
+
+julia&gt; res = poly_optimize(:Clarabel, prob)
+[ Info: Automatically selecting minimal degree cutoff 2
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.9166666672624658
+Time required for optimization: 0.9356329 seconds</code></pre><p>The solution that we found was indeed optimal and the value is <code>0.9166...</code>. Note that &quot;optimal&quot; here means that the solver converged for the given problem. However, a polynomial optimization problem is difficult to solve in general; therefore, it cannot be optimized directly. Instead, a <em>relaxation</em> of the problem has to be constructed. Normally, this must be done explicitly by instantiating a decendant of <a href="reference.html#PolynomialOptimization.Relaxation.AbstractRelaxation"><code>AbstractRelaxation</code></a>; but when <a href="backend.html#PolynomialOptimization.Solver.poly_optimize-Tuple{Val, PolynomialOptimization.Relaxation.AbstractRelaxation, PolynomialOptimization.Relaxation.RelaxationGroupings}-backend"><code>poly_optimize</code></a> is called with a problem instead of a relaxation, it will by default construct a dense relaxation of minimal degree. Therefore, &quot;optimal&quot; in fact only means that the <em>relaxation</em> was solved to global optimality, which in general will only yield an underestimator to the original problem. Note that while Clarabel has a very clear return code - <code>SOLVED</code> says that things went well - this is not necessarily the case for other solvers. Use <a href="backend.html#LinearAlgebra.issuccess-Tuple{Val, Any}-backend"><code>issuccess</code></a> on the result object to check whether the reported solver status is a good one:</p><pre><code class="language-julia-repl hljs">julia&gt; issuccess(res)
+true</code></pre><p>Further note that the optimization time seems to be pretty high for such a small problem. However, this is purely due to the compilation time. Running the optimization again will give a time of the order of a millisecond. Finally, it is not necessary to specify the solver explicitly if only one solver package is loaded; <code>poly_optimize(prob)</code> would work as well. However, if multiple solvers are available, which one is then chosen may depend on the loading order of the packages.</p><h3 id="Checking-optimality"><a class="docs-heading-anchor" href="#Checking-optimality">Checking optimality</a><a id="Checking-optimality-1"></a><a class="docs-heading-anchor-permalink" href="#Checking-optimality" title="Permalink"></a></h3><p>There are two different ways to check whether the given bound is optimal for the original problem. Obviously, if we find a point <span>$x$</span> such that the objective evaluated at <span>$x$</span> gives our bound, then this bound must have been optimal. Of course, the difficulty now lies in finding the point. <code>PolynomialOptimization</code> implements a state of the art <a href="https://doi.org/10.1016/j.laa.2017.04.015">solution extraction algorithm</a>, which can relatively quickly (the cost is essentially that of performing an SVD on the moment matrix) obtain solutions. This will only be guaranteed to work if the problem was indeed optimal, there were finitely many solutions in the first place, and a &quot;good&quot; moment matrix is obtained (i.e., a dense matrix and no low-rank solver was employed) - but there is an alternative which might work well in case these conditions are not satisfied (apart from optimality, obviously), more on this below. The function <a href="reference.html#PolynomialOptimization.poly_solutions"><code>poly_solutions</code></a> gives an iterator that delivers all the (potential) solutions one at a time in an arbitrary order. Alternatively, <a href="reference.html#PolynomialOptimization.poly_all_solutions"><code>poly_all_solutions</code></a> directly calculates all the solutions and grades them according to how much they violate the bound or constraints, if any were given. The solutions are then returned in a best-to-worst order.</p><pre><code class="language-julia-repl hljs">julia&gt; poly_all_solutions(res)
+2-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([-1.1700613807653743e-18, 0.4082426580485429, -0.408242660645461], 5.266275193704928e-10)
+ ([-5.352664236308434e-20, -0.4082426580485437, 0.40824266064546183], 5.266276303927953e-10)</code></pre><p>Every element in the vector is a tuple, where the first entry corresponds to the optimal variables, and the second term is the badness of this solution (which can also be calculated manually using <a href="reference.html#PolynomialOptimization.poly_solution_badness"><code>poly_solution_badness</code></a>). Since here, the badness is of the order of <span>$10^{-8}$</span>, i.e., numerically zero, the points are indeed valid global minima.</p><p>Note that the solution extraction functions just give a vector of numbers; to assign these numbers to variables, the function <a href="reference.html#MultivariatePolynomials.variables"><code>variables</code></a> can be applied to the problem. This is particularly useful if there are multiple variables created at different times, occurring differently in the constraints, such that the order is not clear beforehand.</p><pre><code class="language-julia-repl hljs">julia&gt; variables(prob)
+3-element Vector{Variable{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}}:
+ x₁
+ x₂
+ x₃</code></pre><div class="admonition is-warning"><header class="admonition-header">Variables in the problem</header><div class="admonition-body"><p>A polynomial optimization problem is always constructed using <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>, and this function supports any input that implements the <code>MultivariatePolynomials</code> interface. In the example here, we used <code>DynamicPolynomials</code>, which is probably the most common choice. However, these inputs are not necessarily well-suited to deliver high performance when constructing the actual optimizations. Therefore, <code>poly_problem</code> will convert all inputs to an internal polynomial format. This internal format does not know about the name of variables - real-valued variables will always be printed as <span>$x_i$</span>, complex-valued variables as <span>$z_j$</span> with continuous indices. The <a href="reference.html#MultivariatePolynomials.variables"><code>variables</code></a> function now becomes even more important: It contains the <em>original</em> variables of the polynomials that were given to <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>.</p></div></div><p>A second way to check for optimality is to use the flat extension/truncation criterion originally due to <a href="https://doi.org/10.1090/S0002-9947-00-02472-7">Curto and Fialkow</a> and improved by <a href="https://arxiv.org/abs/1106.2384v2">Nie</a>. This is a sufficient criterion for optimality, and it can be manually checked by calling <a href="reference.html#PolynomialOptimization.optimality_certificate"><code>optimality_certificate</code></a> on the problem (it will only work with non-sparse problems). The function will return <code>:Optimal</code> if the given minimum value can be certified to be optimal; else it will return <code>:Unknown</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; optimality_certificate(res)
+:Optimal</code></pre><p>Note that this is just a sufficient criterion, and the solution might be optimal even if it is violated. As calculating the certificate will involve calculating the ranks of several matrices (and is more complicated in the complex case), it is not necessarily cheaper than trying to extract solutions; as the latter is more informative, it should usually be the way to go.</p><h3 id="Extracting-a-SOS-certificate"><a class="docs-heading-anchor" href="#Extracting-a-SOS-certificate">Extracting a SOS certificate</a><a id="Extracting-a-SOS-certificate-1"></a><a class="docs-heading-anchor-permalink" href="#Extracting-a-SOS-certificate" title="Permalink"></a></h3><p>Whenever the optimization was successful, a valid sums-of-squares certificate will be available, i.e., a decomposition of the objective (in this simple, unconstrained, case). Here, the minimum value of the objective was found to be <code>0.9166...</code>. We can therefore obtain a certificate for the positivity of the original objective minus this global minimum:</p><pre><code class="language-julia-repl hljs">julia&gt; cert = SOSCertificate(res)
+Sum-of-squares certificate for polynomial optimization problem
+1.0 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴ - 0.9166666672624658
+= (-0.24936226129389166 + 0.0 + 0.0 + 0.0 + 0.681040802546548x₃² - 0.13418414698255413x₂x₃ + 0.6810200107054156x₂² + 0.0 + 0.0 + 0.7150557592772305x₁²)²
++ (-0.00021451050140762083 + 0.0 + 0.0 + 0.0 - 0.6334453950216662x₃² + 0.0016567627201615803x₂x₃ + 0.6363889265439937x₂² + 0.0 + 0.0 - 0.00254891018011664x₁²)²
++ (-0.05053765946744563 + 0.0 + 0.0 + 0.0 + 0.35808256829743135x₃² + 0.407798788978473x₂x₃ + 0.3528714670120098x₂² + 0.0 + 0.0 - 0.6182223086852784x₁²)²
++ (0.0 - 0.6308015756295695x₃ - 0.6308015765942243x₂ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 - 0.571599380223713x₁x₃ - 0.5716874595884525x₁x₂ + 0.0)²
++ (-0.1363733706053911 + 0.0 + 0.0 + 0.0 + 0.08189769928366018x₃² - 0.65436868542136x₂x₃ + 0.0818694633768503x₂² + 0.0 + 0.0 - 0.32632796895148375x₁²)²
++ (0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.4384985146463991x₁x₃ - 0.43843095558075706x₁x₂ + 0.0)²
++ (0.0 + 0.0 + 0.0 - 0.45290489466060885x₁ + 0.0 + 0.0 + 0.0 + 0.0 + 0.0 + 0.0)²</code></pre><p>This certificate consists of a number of polynomials that, when squared and added, should give rise to the original objective. Note that when printing the certificate, values that are below a certain threshold will be set to zero by default. We can also explicitly iterate through all the polynomials and sum them up, although we have to be careful to map them back to their original representation for this:</p><pre><code class="language-julia-repl hljs">julia&gt; p = zero(polynomial_type(x, Float64));
+
+julia&gt; for pᵢ in cert[:objective, 1] # no sparsity, so there is just a single grouping
+           p += PolynomialOptimization.change_backend(pᵢ, x)^2
+       end
+
+julia&gt; map_coefficients!(x -&gt; round(x, digits=8), p)
+0.08333334 + x₂x₃ + x₃⁴ + x₂²x₃² + x₂⁴ + x₁²x₃² + x₁²x₂² + x₁⁴</code></pre><p>Note how this is precisely the objective minus the global minimum.</p><h3 id="Using-the-Newton-polytope"><a class="docs-heading-anchor" href="#Using-the-Newton-polytope">Using the Newton polytope</a><a id="Using-the-Newton-polytope-1"></a><a class="docs-heading-anchor-permalink" href="#Using-the-Newton-polytope" title="Permalink"></a></h3><p>The current example is an unconstrained optimization problem; hence, the size of the full basis, which is 10, may be larger than actually necessary. It is not a simple problem to determine the relevant basis elements in general; but unconstrained problems allow for the Newton polytope technique. To use it, we first need to load a supported solver for the Newton polytope, then we simply explicitly construct the <a href="reference.html#PolynomialOptimization.Relaxation.Newton"><code>Newton</code></a> relaxation object:</p><pre><code class="language-julia-repl hljs">julia&gt; import Mosek
+
+julia&gt; Relaxation.Newton(prob)
+[ Info: Automatically selecting minimal degree cutoff 2
+Relaxation.Newton of a polynomial optimization problem
+Variable cliques:
+  x[1], x[2], x[3]
+PSD block sizes:
+  [10 =&gt; 1]
+Relaxation degree: 2</code></pre><p>In this case, no basis reduction was possible. However, in other cases, this can work. For example, if you want to inspect the Newton polytope of the polynomials whose squares might make up a certain objective, you can call <a href="reference.html#PolynomialOptimization.Newton.halfpolytope"><code>Newton.halfpolytope</code></a> directly (the name comes from the fact that you pass the objective to the function <a href="reference.html#PolynomialOptimization.Newton.halfpolytope"><code>Newton.halfpolytope</code></a>, and by a <a href="https://doi.org/10.1215/S0012-7094-78-04519-2">theorem by Reznick</a>, the Newton polytope of the decomposition functions that have to be squared to give the objective will be contained in half the Newton polytope of the objective itself):</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x y;
+
+julia&gt; Newton.halfpolytope(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1)
+4-element MonomialVector{DynamicPolynomials.Commutative{DynamicPolynomials.CreationOrder}, Graded{LexOrder}}:
+ 1
+ xy
+ xy²
+ x²y</code></pre><p>This reveals that, were the Motzkin representable by a sum of squares, the equality</p><p class="math-container">\[x^4 y^2 + x^2 y^4 - 3 x^2 y^2 + 1 = \sum_i (\alpha_i + \beta_i x y + \gamma_i x y^2 + \delta_i x^2 y)^2\]</p><p>would have to hold; but expanding the right-hand side will lead to the coefficient <span>$\sum_i \beta_i^2$</span> in front of the monomial <span>$x^2 y^2$</span>, which cannot be negative; hence, the Motzkin polynomial is not a sum of squares.</p><p>Note that the calculation of the Newton polytope currently requires Mosek or COPT. There are some preprocessing options that may be able to speed up the calculation, although it is already extremely fast by itself and can calculate the correct basis for objectives with hundreds of terms in a decent time (which can be further reduced by multithreading or distributed computing). Check out the documentation for <a href="reference.html#PolynomialOptimization.Newton.halfpolytope"><code>Newton.halfpolytope</code></a> for more information.</p><p>In case you already happen to know a (better) choice of basis, you may opt for <a href="reference.html#PolynomialOptimization.Relaxation.Custom"><code>Relaxation.Custom</code></a>. Note that relaxations are built incrementally, where the only relaxation that can be constructed directly from a problem is the dense one. So what actually happened in calling <code>Relaxation.Newton(prob)</code> is that first a dense relaxation of the problem was constructed, which was then passed on to the Newton relaxation constructor: <code>Relaxation.Newton(Relaxation.Dense(prob))</code>. The info message about the minimal degree cutoff was generated by the dense relaxation. &quot;Construction&quot; here does not mean that the full dense basis was actually built in memory; a lazy representation is used for the dense basis. This has the consequence that if you use a custom basis, you can then decide to refine this further by passing the custom relaxation to the Newton relaxation constructor. Similarly, every relaxation can serve as the starting point for another one.</p><h3 id="Applying-inexact-sparsity"><a class="docs-heading-anchor" href="#Applying-inexact-sparsity">Applying inexact sparsity</a><a id="Applying-inexact-sparsity-1"></a><a class="docs-heading-anchor-permalink" href="#Applying-inexact-sparsity" title="Permalink"></a></h3><p>There are four kinds of inexact sparsity method implemented in <code>PolynomialOptimization</code>:</p><ul><li><a href="reference.html#PolynomialOptimization.Relaxation.SparsityCorrelative"><code>Relaxation.SparsityCorrelative</code></a></li><li><a href="reference.html#PolynomialOptimization.Relaxation.SparsityTermBlock"><code>Relaxation.SparsityTermBlock</code></a></li><li><a href="reference.html#PolynomialOptimization.Relaxation.SparsityTermChordal"><code>Relaxation.SparsityTermChordal</code></a></li><li><a href="reference.html#PolynomialOptimization.Relaxation.SparsityCorrelativeTerm"><code>Relaxation.SparsityCorrelativeTerm</code></a></li></ul><p>Applying the analysis as simple as passing the problem to the respective type. For this particular problem, there is no correlative sparsity:</p><pre><code class="language-julia-repl hljs">julia&gt; Relaxation.SparsityCorrelative(prob)
+[ Info: Automatically selecting minimal degree cutoff 2
+Relaxation.SparsityCorrelative of a polynomial optimization problem
+Variable cliques:
+  x[1], x[2], x[3]
+PSD block sizes:
+  [10 =&gt; 1]</code></pre><p>So there is only a single clique, leading to a basis of size <code>10</code>. However, there is term sparsity:</p><pre><code class="language-julia-repl hljs">julia&gt; tbs = Relaxation.SparsityTermBlock(prob)
+[ Info: Automatically selecting minimal degree cutoff 2
+Relaxation.SparsityTerm of a polynomial optimization problem
+Variable cliques:
+  x[1], x[2], x[3]
+PSD block sizes:
+  [5 =&gt; 1, 2 =&gt; 1, 1 =&gt; 3]</code></pre><p>We get a basis of size <code>5</code>, one of size <code>2</code>, and three bases of size <code>1</code> (here, by <em>basis</em> we mean a set of monomials that indexes the moment/SOS matrices). <code>PolynomialOptimization</code> will model these by a <code>5 × 5</code> semidefinite matrix, a rotated second-order cone, as well as three linear constraints. This is much cheaper than a <code>10 × 10</code> semidefinite matrix. Let&#39;s optimize the sparse problem:</p><pre><code class="language-julia-repl hljs">julia&gt; poly_optimize(:Clarabel, tbs)
+Polynomial optimization result
+Relaxation method: SparsityTerm
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.9166666718972408
+Time required for optimization: 0.00306 seconds</code></pre><p>Again, we get the same optimal value, so introducing the sparsity did not make our relaxation worse (which is <em>per se</em> not guaranteed), and we are still able to get the same optimal solutions:</p><pre><code class="language-julia-repl hljs">julia&gt; poly_all_solutions(ans)
+2-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([0.0, 0.4082661947158492, -0.408266194715714], 4.589421509493263e-9)
+ ([0.0, -0.4082661947158492, 0.408266194715714], 4.589421509493263e-9)</code></pre><p>Note that perhaps surprisingly, <code>PolynomialOptimization</code> can still deliver good optimal points despite the fact that term sparsity was in effect. The usual extraction algorithms will fail, as for every moment <span>$m$</span>, they also require the moment <span>$m x$</span> to be present for all variables <span>$x$</span> - term sparsity cannot to provide this (just check that the moment matrix contains lots of <code>NaN</code> values). Hence, <a href="reference.html#PolynomialOptimization.poly_all_solutions"><code>poly_all_solutions</code></a> will automatically switch to a different heuristic solution extraction algorithm that is always successful in the simple case of a rank-1 moment matrix, but can also often also give good results in the more general case such as here. As a rule of thumb, if all the solutions encoded in the moment matrix differ only by the signs or phases of individual components, the heuristic will be successful. Still, the fact that the moments may encode multiple solutions may be an issue that can prevent successfully obtaining a solution vector. We will introduce a way to bypass this problem below.</p><p>Assume that our term sparsity gave a worse bound than the dense case (which in general we would not know, since the dense problem is typically far too large to be solved; but we just don&#39;t get a proper optimal point, though this could also be due to the Lasserre hierarchy level being insufficient). Then, we could try to iterate the term sparsity hierarchy, keeping the same level in the Lasserre hierarchy.</p><pre><code class="language-julia-repl hljs">julia&gt; Relaxation.iterate!(tbs)
+Relaxation.SparsityTerm of a polynomial optimization problem
+Variable cliques:
+  x[1], x[2], x[3]
+PSD block sizes:
+  [5 =&gt; 1, 2 =&gt; 2, 1 =&gt; 1]
+
+julia&gt; Relaxation.iterate!(tbs)</code></pre><p>In general, we simply use <a href="intpolynomials.html#PolynomialOptimization.IntPolynomials.MultivariateExponents.iterate!-Tuple{AbstractVector{Int64}, PolynomialOptimization.IntPolynomials.MultivariateExponents.AbstractExponents}"><code>Relaxation.iterate!</code></a> to move to the next higher level (note how two of the linear constraints were merged into a quadratic constraint). If <code>iterate!</code> returns the new sparsity object, something changed and we might try to optimize the new sparse problem, getting a potentially better bound. If <code>iterate!</code> returns <code>nothing</code>, the hierachy terminated and nothing more can (for term sparsity: must) be done (as the last level for term sparsity is as good as the dense problem).</p><p>We can also try what happens if we use term sparsity with chordal cliques instead of connected components:</p><pre><code class="language-julia-repl hljs">julia&gt; tcs = Relaxation.SparsityTermChordal(prob)
+[ Info: Automatically selecting minimal degree cutoff 2
+Relaxation.SparsityTerm of a polynomial optimization problem
+Variable cliques:
+  x[1], x[2], x[3]
+PSD block sizes:
+  [4 =&gt; 1, 2 =&gt; 2, 1 =&gt; 3]
+
+julia&gt; res = poly_optimize(:Clarabel, tcs)
+Polynomial optimization result
+Relaxation method: SparsityTerm
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.9166666672685418
+Time required for optimization: 0.0027146 seconds</code></pre><p>So again, we get the same optimal result. We could even extract a solution point with better accuary, and the problem was smaller, as we now have just a basis of size <code>4</code> instead of <code>5</code> (at the cost of another quadratic constraint, which is much cheaper than larger semidefinite matrices).</p><h3 id="details"><a class="docs-heading-anchor" href="#details">Details on the optimization process</a><a id="details-1"></a><a class="docs-heading-anchor-permalink" href="#details" title="Permalink"></a></h3><p>The first parameter for <a href="backend.html#PolynomialOptimization.Solver.poly_optimize-Tuple{Val, PolynomialOptimization.Relaxation.AbstractRelaxation, PolynomialOptimization.Relaxation.RelaxationGroupings}-backend"><code>poly_optimize</code></a> is the solver/method that is used to optimize the problem. For a list of supported methods, see <a href="includedsolvers.html#solvers_poly_optimize">the solver reference</a>.</p><p>Note that by passing the keyword argument <code>verbose=true</code> to the optimization function, we get some more insight into what happens behind the hood. Let&#39;s redo the last optimization.</p><pre><code class="language-julia-repl hljs">julia&gt; poly_optimize(:Clarabel, tcs, verbose=true)
+Beginning optimization...
+Clique merging disabled.
+PSD block sizes:
+  [4 =&gt; 1, 2 =&gt; 2, 1 =&gt; 3]
+Starting solver...
+Setup complete in 0.000266 seconds
+-------------------------------------------------------------
+           Clarabel.jl v0.9.0  -  Clever Acronym
+                   (c) Paul Goulart
+                University of Oxford, 2022
+-------------------------------------------------------------
+
+problem:
+  variables     = 11
+  constraints   = 20
+  nnz(P)        = 0
+  nnz(A)        = 24
+  cones (total) = 7
+    : Zero        = 1,  numel = 1
+    : Nonnegative = 3,  numel = (1,1,1)
+    : SecondOrder = 2,  numel = (3,3)
+    : PSDTriangle = 1,  numel = 10
+
+settings:
+  linear algebra: direct / qdldl, precision: Float64
+  max iter = 200, time limit = Inf,  max step = 0.990
+  tol_feas = 1.0e-08, tol_gap_abs = 1.0e-08, tol_gap_rel = 1.0e-08,
+  static reg : on, ϵ1 = 1.0e-08, ϵ2 = 4.9e-32
+  dynamic reg: on, ϵ = 1.0e-13, δ = 2.0e-07
+  iter refine: on, reltol = 1.0e-13, abstol = 1.0e-12,
+               max iter = 10, stop ratio = 5.0
+  equilibrate: on, min_scale = 1.0e-04, max_scale = 1.0e+04
+               max iter = 10
+
+iter    pcost        dcost       gap       pres      dres      k/t        μ       step
+---------------------------------------------------------------------------------------------
+  0   1.0000e+00   1.0000e+00  0.00e+00  4.99e-01  5.83e-01  1.00e+00  1.91e+00   ------
+  1   1.0240e+00   1.0238e+00  2.08e-04  6.91e-02  8.37e-02  9.27e-02  3.10e-01  9.09e-01
+  2   9.2888e-01   9.2859e-01  2.93e-04  5.10e-03  6.37e-03  6.34e-03  2.54e-02  9.21e-01
+  3   9.1842e-01   9.1835e-01  7.08e-05  1.12e-03  1.42e-03  1.40e-03  5.85e-03  8.71e-01
+  4   9.1762e-01   9.1759e-01  3.15e-05  4.04e-04  5.09e-04  4.96e-04  2.15e-03  7.53e-01
+  5   9.1673e-01   9.1672e-01  3.94e-06  5.76e-05  7.26e-05  7.15e-05  3.06e-04  8.64e-01
+  6   9.1668e-01   9.1668e-01  4.44e-07  7.88e-06  9.94e-06  9.86e-06  4.16e-05  9.30e-01
+  7   9.1667e-01   9.1667e-01  1.05e-07  1.48e-06  1.86e-06  1.83e-06  7.83e-06  8.23e-01
+  8   9.1667e-01   9.1667e-01  3.09e-08  3.49e-07  4.40e-07  4.26e-07  1.85e-06  8.84e-01
+  9   9.1667e-01   9.1667e-01  6.54e-09  6.68e-08  8.41e-08  8.08e-08  3.54e-07  8.23e-01
+ 10   9.1667e-01   9.1667e-01  1.35e-09  1.32e-08  1.66e-08  1.59e-08  6.99e-08  9.04e-01
+ 11   9.1667e-01   9.1667e-01  2.79e-10  2.51e-09  3.16e-09  3.01e-09  1.34e-08  8.23e-01
+---------------------------------------------------------------------------------------------
+Terminated with status = solved
+solve time = 5.69ms
+Optimization complete, retrieving moments
+Polynomial optimization result
+Relaxation method: SparsityTerm
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.9166666672685418
+Time required for optimization: 0.1599203 seconds</code></pre><p>So first, <code>PolynomialOptimization</code> will determine the bases for the matrices according to the sparsity pattern. Note that after this step, the if the resulting relaxation is wrapped into a <a href="reference.html#PolynomialOptimization.Relaxation.CliqueMerged"><code>Relaxation.CliqueMerged</code></a>, an attempt will be made to merge bases if their heuristic cost for treating them separately would be worse than joining them (this concept is nicely explained in the <a href="https://oxfordcontrol.github.io/COSMO.jl/stable/decomposition/#Clique-merging">COSMO documenation</a>). In general, doing clique merging will lead to faster optimizations; however, the merging process itself can be quite costly and in fact for large problems might cost much more time than it gains - hence, it must be enabled by explicitly constructing the merged relaxation. After this step is done, the Clarabel data (or any other optimizer structure, which we all address directly without <code>JuMP</code>) is constructed; then the solver runs.</p><p>Indeed, due to sparsity, the moment matrix is full of unknowns:</p><pre><code class="language-julia-repl hljs">julia&gt; show(stdout, &quot;text/plain&quot;, moment_matrix(res))
+10×10 LinearAlgebra.Symmetric{Float64, Matrix{Float64}}:
+   1.0         NaN         NaN         NaN             0.166666    -0.166666     0.166666   NaN          NaN            1.60942e-8
+ NaN             0.166666   -0.166666  NaN           NaN          NaN          NaN          NaN          NaN          NaN
+ NaN            -0.166666    0.166666  NaN           NaN          NaN          NaN          NaN          NaN          NaN
+ NaN           NaN         NaN           1.60942e-8  NaN          NaN          NaN          NaN          NaN          NaN
+   0.166666    NaN         NaN         NaN             0.0277777  NaN            0.0277777  NaN          NaN            2.5981e-9
+  -0.166666    NaN         NaN         NaN           NaN            0.0277777  NaN          NaN          NaN          NaN
+   0.166666    NaN         NaN         NaN             0.0277777  NaN            0.0277777  NaN          NaN            2.5981e-9
+ NaN           NaN         NaN         NaN           NaN          NaN          NaN            2.5981e-9  NaN          NaN
+ NaN           NaN         NaN         NaN           NaN          NaN          NaN          NaN            2.5981e-9  NaN
+   1.60942e-8  NaN         NaN         NaN             2.5981e-9  NaN            2.5981e-9  NaN          NaN           -3.42786e-9</code></pre><p>The rows and columns of the matrix are indexed by the basis of the relaxation:</p><pre><code class="language-julia-repl hljs">julia&gt; Relaxation.basis(tcs)
+10-element PolynomialOptimization.IntPolynomials.IntMonomialVector{3, 0, UInt64, PolynomialOptimization.IntPolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}, PolynomialOptimization.IntPolynomials.IntMonomial{3, 0, UInt64, PolynomialOptimization.IntPolynomials.MultivariateExponents.ExponentsDegree{3, UInt64}}}:
+ 1
+ x₃
+ x₂
+ x₁
+ x₃²
+ x₂x₃
+ x₂²
+ x₁x₃
+ x₁x₂
+ x₁²</code></pre><p>Combining the basis information with the moment matrix, we can see how the package is able to return solutions without having access to the full moment matrix. There are values for the squares of the variables available, so we can deduce two possible candidates for the original variables - at least, if the values assigned to the moments are consistent. Choosing among the signs becomes possible by looking for mixed terms.</p><h3 id="Always-extracting-a-solution"><a class="docs-heading-anchor" href="#Always-extracting-a-solution">Always extracting a solution</a><a id="Always-extracting-a-solution-1"></a><a class="docs-heading-anchor-permalink" href="#Always-extracting-a-solution" title="Permalink"></a></h3><p>The fact that <code>PolynomialOptimization</code> was unable to extract a (valid) solution can either mean that the relaxation was insufficient and did not converge to the optimum of the <em>actual</em> problem, or that there are multiple solutions which are too difficult for the heuristic to grasp. There is a simple remedy of this problem: By introducing a small, linear perturbation to the objective, the solution will almost surely be unique; so if the extracted solution is bad, this means that the relaxation was insufficient. Of course, now the solution is not a solution to the original problem, but the perturbed one - but assuming a robust problem, the returned optimal point will be close to the actual global optimum. It can therefore then be used as an initial point to another nonlinear solver that will deliver the true global optimum. <code>PolynomialOptimization</code> makes adding a perturbation easy: Just call <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a> with the keyword parameter <code>perturbation=...</code>, where the magnitude of the perturbation should be specified (typically between <code>1e-3</code> and <code>1e-6</code> is a good guess). Note that adding a perturbation may degrade sparsity. For this, you may also give a vector of the same length as the number of variables, specifying a different perturbation magnitude for each variable (or just disabling the perturbation by passing <code>0</code>).</p><h3 id="Changing-the-internal-representation"><a class="docs-heading-anchor" href="#Changing-the-internal-representation">Changing the internal representation</a><a id="Changing-the-internal-representation-1"></a><a class="docs-heading-anchor-permalink" href="#Changing-the-internal-representation" title="Permalink"></a></h3><p>Usually, the moment matrix is modeled as a semidefinite constraint in the solver. However, semidefinite programs scale much less favorably than other types of convex optimization programs such as linear or quadratic ones. It is possible to change between the internal representations that are used for the moment matrix: apart from semidefinite, also the <a href="https://doi.org/10.1137/18M118935X">diagonally dominant and scaled diagonally dominant cones</a> are supported. While they scale better, they usually provide worse bounds:</p><pre><code class="language-julia-repl hljs">julia&gt; res_dd = poly_optimize(:Clarabel, prob, representation=RepresentationDD())
+[ Info: Automatically selecting minimal degree cutoff 2
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.5000000105896211
+Time required for optimization: 0.5579216 seconds</code></pre><p>Again, the long time is purely due to precompilation of the new methods.</p><p>This time, no semidefinite constraint was employed, only linear ones. As is clearly visible, the bound is quite bad. But this process can be iterated and the diagonally dominant cone can be <a href="https://doi.org/10.48550/arXiv.1510.01597">rotated</a> based on the data from the previous optimization. This is call re-optimization, and while a lot of details can be customized, if none are specified, <code>PolynomialOptimization</code> will take the Cholesky decomposition of the matrix underlying the SOS certificate of the previous iteration as a new rotation basis.</p><div class="admonition is-info"><header class="admonition-header">Info</header><div class="admonition-body"><p>Different representations lead to different problems from the perspective of the solver - in particular, different with respect to which solver functions are used or how the data is aligned in memory. Therefore, changing the <em>type</em> of the representation requires a completely new problem to be set up. However, if only the <em>data within</em> the representatin is changed, the old problem can be re-used, reducing the setup time. This is irrelevant if a solver is used whose interface in <code>PolynomialOptimization</code> does not support this faster reoptimization. Note that by default, the default rotations used for the DD and SDD representation are identities of the type <code>UniformScaling</code>. This is only compatible with other diagonal rotations. Use <a href="reference.html#PolynomialOptimization.Solver.RepresentationIAs"><code>RepresentationIAs</code></a> to &quot;fake&quot; an upper triangular identity at the beginning.</p></div></div><pre><code class="language-julia-repl hljs">julia&gt; res_dd_rotated = poly_optimize(res_dd)
+# output truncated
+Lower bound to optimum (in case of good status): 0.7882579368640298
+Time required for optimization: 1.5101965 seconds
+
+julia&gt; res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.8744697855281065
+Time required for optimization: 0.0355882 seconds
+
+julia&gt; res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.9122828985708029
+Time required for optimization: 0.0097173 seconds
+
+julia&gt; res_dd_rotated = poly_optimize(res_dd_rotated)
+# output truncated
+Lower bound to optimum (in case of good status): 0.9160797358944991
+Time required for optimization: 0.0102907 seconds</code></pre><p>So indeed, after a couple of iterations, the optimum is approached pretty well. We could have used the scaled diagonally dominant representation instead, which relies on quadratic instead of linear programs, which for this particular example would have been exact without any iteration.</p><h2 id="Constraints"><a class="docs-heading-anchor" href="#Constraints">Constraints</a><a id="Constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Constraints" title="Permalink"></a></h2><h3 id="Equality-constraints"><a class="docs-heading-anchor" href="#Equality-constraints">Equality constraints</a><a id="Equality-constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Equality-constraints" title="Permalink"></a></h3><p>Equality constraints are accessible by passing the keyword argument <code>zero</code> to <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>, which constrains those polynomials to be zero. They are relatively cheap to realize in the solver, as they don&#39;t require another semidefinite matrix, just linear constraints or free scalar variables depending on the approach.</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x[1:2];
+
+julia&gt; poly_optimize(:Clarabel, poly_problem(-(x[1] -1)^2 - (x[1] - x[2])^2 - (x[2] -3)^2,
+                                             zero=[(x[1] - 1.5)^2 + (x[2] - 2.5)^2 - .5]), 1)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -3.999999965663831
+Time required for optimization: 0.0014009 seconds
+
+julia&gt; poly_all_solutions(ans)
+1-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([1.0000155981763819, 3.0000155844516696], 2.0076497353471723e-8)
+</code></pre><p>Note that when grading the quality of a solution, the package will determine the violation of the constraints as well as how far the actual value is away from what it should be, and return the worst of all violations. Note that in principle, Gröbner basis methods would allow to incorporate equality constraints with a potentially even higher reduction in the number of variables. While an early version of <code>PolynomialOptimization</code> supported this, any Gröbner basis method has been removed from the package. Experience showed that the cost of calculating a Gröbner basis can easily be many times larger than working with the original problem; furthermore, then taking everything modulo this basis prevents some optimizing assumptions to be made during the problem construction. Lastly, removing a variable or constraint does not help a lot with respect to scaling, as the main issue is the size of the semidefinite cones - which would be given by a basis of standard monomials with respect to the Gröbner basis, and the savings there are often minuscule.</p><h3 id="Inequality-constraints"><a class="docs-heading-anchor" href="#Inequality-constraints">Inequality constraints</a><a id="Inequality-constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Inequality-constraints" title="Permalink"></a></h3><p>Inequality constraints are implemented using Putinar&#39;s Positivstellensatz or localizing matrices. They can be specified by passing the keyword argument <code>nonneg</code> to <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>, which constraints those polynomials to be greater or equal to zero.</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x[1:2];
+
+julia&gt; prob = poly_problem(-(x[1]-1)^2 - (x[1]-x[2])^2 - (x[2]-3)^2,
+                           nonneg=[1-(x[1]-1)^2, 1-(x[1]-x[2])^2, 1-(x[2]-3)^2])
+Real-valued polynomial optimization problem in 2 variables
+Objective: -10.0 + 6.0x₂ + 2.0x₁ - 2.0x₂² + 2.0x₁x₂ - 2.0x₁²
+3 nonnegative constraints
+1: 2.0x₁ - x₁² ≥ 0
+2: 1.0 - x₂² + 2.0x₁x₂ - x₁² ≥ 0
+3: -8.0 + 6.0x₂ - x₂² ≥ 0
+
+julia&gt; poly_optimize(:Clarabel, prob, 1)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -2.9999999986040407
+Time required for optimization: 0.002556 seconds
+
+julia&gt; poly_optimize(:Clarabel, prob, 2)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: ALMOST_SOLVED
+Lower bound to optimum (in case of good status): -2.000000014367033
+Time required for optimization: 0.0057509 seconds</code></pre><p>This is an example where the first relaxation level is not optimal, but the second is, as inspecting the solutions will show (which also allows us to ignore the somewhat uncertain status of the solver).</p><h3 id="PSD-constraints"><a class="docs-heading-anchor" href="#PSD-constraints">PSD constraints</a><a id="PSD-constraints-1"></a><a class="docs-heading-anchor-permalink" href="#PSD-constraints" title="Permalink"></a></h3><p><code>PolynomialOptimization</code> also supports conditions that constrain a matrix that is made up of polynomials to be positive semidefinite. They can be specified by passing the keyword argument <code>psd</code> to <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>; note that the matrices must be symmetric/hermitian.</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x[1:2];
+
+julia&gt; prob = poly_problem(-x[1]^2 - x[2]^2, zero=[x[1]+x[2]-1],
+                           psd=[[1-4x[1]*x[2]  x[1]; x[1]  4-x[1]^2-x[2]^2]])
+Real-valued polynomial optimization problem in 2 variables
+Objective: -x₂² - x₁²
+1 equality constraint
+1: -1.0 + x₂ + x₁ = 0
+1 semidefinite constraint
+2: [1.0 - 4.0x₁x₂  x₁
+    x₁             4.0 - x₂² - x₁²] ⪰ 0
+
+julia&gt; poly_optimize(:Clarabel, prob, 1)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -3.999999994240309
+Time required for optimization: 0.1618452 seconds
+
+julia&gt; poly_optimize(:Clarabel, prob, 2)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -3.904891539034092
+Time required for optimization: 0.0041964 seconds
+
+julia&gt; optimality_certificate(ans)
+:Optimal</code></pre><p>At second level, we get the optimal solution.</p><h3 id="Improving-the-optimization-without-changing-the-level"><a class="docs-heading-anchor" href="#Improving-the-optimization-without-changing-the-level">Improving the optimization without changing the level</a><a id="Improving-the-optimization-without-changing-the-level-1"></a><a class="docs-heading-anchor-permalink" href="#Improving-the-optimization-without-changing-the-level" title="Permalink"></a></h3><p>The problem can be further tightened by a careful analysis, as <a href="https://doi.org/10.1007/s10107-018-1276-2">Nie</a> noted, by rewriting the Lagrange multipliers as polynomials - which will not modify the problem if the minimum is attained at a critical point (but not that non-critical global minima will be missed). <code>PolynomialOptimization</code> is able to automatically analyze the problem and add the tightening constraints (Mosek or COPT are required at the moment). For this, simply pass <code>tighter=true</code> (or <code>tighter=:Mosek</code> resp. <code>tighter=:COPT</code>) to <code>poly_problem</code>. This will result in a preprocessing that adds constraints, so expect the problem to grow. To see the progress during the preprocessing stage, use <code>verbose=true</code>. It may be the case that the required tightening polynomials cannot be determined since their degree always turns out to be insufficient to satisfy the conditions. Since <code>PolynomialOptimization</code> cannot distinguish this from the case where the degree is just quite high, the procedure may run into an infinite(ly-seeming) loop. Complex-valued problems are not supported at the moment; and PSD constraints will be skipped during the tightening.</p><pre><code class="language-julia-repl hljs">julia&gt; @polyvar x y;
+
+julia&gt; poly_optimize(:Clarabel, poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1), 5)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: ALMOST_SOLVED
+Lower bound to optimum (in case of good status): -1.5097034199113162
+Time required for optimization: 0.4214607 seconds</code></pre><p>The given problem is quite hard, as it leads to ill-posed optimization problems with which most solvers expectedly struggle (in fact, while Clarabel gives a solution, the result will differ significantly depending on the operating system). Adding the tightening equalities (here, as there are no additional constraints, this just means to add the condition <span>$\nabla\mathrm{objective} = 0$</span>), the fifth order is already sufficient:</p><pre><code class="language-julia-repl hljs">julia&gt; prob = poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, tighter=true)
+Real-valued polynomial optimization problem in 2 variables
+Objective: 1.0 - 3.0x₁²x₂² + x₁²x₂⁴ + x₁⁴x₂²
+2 equality constraints
+1: -6.0x₁x₂² + 2.0x₁x₂⁴ + 4.0x₁³x₂² = 0
+2: -6.0x₁²x₂ + 4.0x₁²x₂³ + 2.0x₁⁴x₂ = 0
+
+julia&gt; res = poly_optimize(:Clarabel, prob, 5)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 8.741532679530553e-8
+Time required for optimization: 0.1160416 seconds</code></pre><p>Here, it appears that the default solution extraction mechanism does not work well (in fact, since the algorithm is randomized, you&#39;ll get a vastly different result whenever the extraction is performced), so let&#39;s try to get the solution via the heuristic method:</p><pre><code class="language-julia-repl hljs">julia&gt; poly_all_solutions(:heuristic, res)
+4-element Vector{Tuple{Vector{Float64}, Float64}}:
+ ([1.000000651012571, 1.0000006504036543], 7.809732969654704e-6)
+ ([-1.000000651012571, 1.0000006504036543], 7.809732969654704e-6)
+ ([1.000000651012571, -1.0000006504036543], 7.809732969654704e-6)
+ ([-1.000000651012571, -1.0000006504036543], 7.809732969654704e-6)</code></pre><p>This was successful in delivering multiple solutions.</p><h3 id="Helping-convergence"><a class="docs-heading-anchor" href="#Helping-convergence">Helping convergence</a><a id="Helping-convergence-1"></a><a class="docs-heading-anchor-permalink" href="#Helping-convergence" title="Permalink"></a></h3><p>Another way to modify the problem is to exploit a prefactor in the objective. <a href="https://doi.org/10.1007/s10107-021-01634-1">Mai et al.</a> showed that by changing the objective from <span>$f(x)$</span> to <span>$\theta^k(x) \bigl(f(x) + \epsilon \theta^d(x)\bigr)$</span>, where <span>$\theta(x) = 1 + \Vert x\Vert^2$</span> there is a bound on <span>$k$</span> that guarantees membership in the degree-<span>$(k + d)$</span> sums-of-squares cone. In contrast to other known bounds, this one is very easy to calculate, and it is not exponential (at least for unconstrained problems...). It holds even for noncompact feasible sets, in contrast to Putinar&#39;s result. The price to pay is that the objective itself is of course modified and therefore the optimal value of the problem is only in a neighborhood of the original problem.</p><p>By using the <code>noncompact=(ϵ, k)</code> when constructing the problem using <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a>, this is done automatically. Let us apply this to the Motzkin case:</p><pre><code class="language-julia-repl hljs">julia&gt; prob = poly_problem(x^4*y^2 + x^2*y^4 - 3x^2*y^2 +1, noncompact=(1e-5, 1))
+Real-valued polynomial optimization problem in 2 variables
+Objective: 1.00001 + 1.00004x₂² + 1.00004x₁² + 6.000000000000001e-5x₂⁴ - 2.99988x₁²x₂² + 6.000000000000001e-5x₁⁴ + 4.0e-5x₂⁶ - 1.9998799999999999x₁²x₂⁴ - 1.9998799999999999x₁⁴x₂² + 4.0e-5x₁⁶ + 1.0e-5x₂⁸ + 1.00004x₁²x₂⁶ + 2.00006x₁⁴x₂⁴ + 1.00004x₁⁶x₂² + 1.0e-5x₁⁸
+Objective was scaled by the prefactor 1.0 + x₂² + x₁²
+
+julia&gt; poly_optimize(:Clarabel, prob)
+[ Info: Automatically selecting minimal degree cutoff 4
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.0002699763854160192
+Time required for optimization: 0.0046539 seconds</code></pre><p>Indeed, now a basis of degree 4 was sufficient to find that the minimum value looks pretty nonnegative. However, this is hard to quantify, as for this, we&#39;d have to extract a solution from the perturbed <code>prob</code>. The algorithm to do this is not implemented at the moment, as it would require the successive construction and solution of multiple polynomial optimization problems, which is not very efficient.</p><h2 id="Complex-valued-problems"><a class="docs-heading-anchor" href="#Complex-valued-problems">Complex-valued problems</a><a id="Complex-valued-problems-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-valued-problems" title="Permalink"></a></h2><p><code>PolynomialOptimization</code> fully supports the <a href="https://doi.org/10.1137/15M1034386">complex-valued Lasserre hierarchy</a>, including its <a href="https://doi.org/10.1007/s10957-021-01975-z">sparse analysis</a>. For this, simply use <code>@complex_polyvar</code> instead of <code>@polyvar</code> to declare your variables as complex. Note that feature of <code>DynamicPolynomials</code> requires at least version <code>0.6</code>. Use <code>conj</code> at your discretion, but note that <code>real</code> and <code>imag</code> should not be used in the problem description! Instead, use <code>(z + conj(z))/2</code> for the real and <code>im*(conj(z) - z)/2</code> for the imaginary part, as well as <code>z*conj(z)</code> for the absolute value square.</p><p>As soon as <a href="reference.html#PolynomialOptimization.poly_problem-Tuple{P} where P&lt;:AbstractPolynomialLike"><code>poly_problem</code></a> detects complex variables, it switches to the complex-valued hierarchy.</p><pre><code class="language-julia-repl hljs">julia&gt; @complex_polyvar z;
+
+julia&gt; prob = poly_problem(z + conj(z), zero=[z*conj(z)-1])
+Complex-valued polynomial optimization problem in 1 variable
+Objective: z̅₁ + z₁
+1 equality constraint
+1: (-1.0 + 0.0im) + z₁z̅₁ = 0
+
+julia&gt; poly_optimize(:Clarabel, prob)
+[ Info: Automatically selecting minimal degree cutoff 1
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -1.9999999928826857
+Time required for optimization: 1.1383336 seconds
+
+julia&gt; poly_all_solutions(ans)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([-1.0000000000000042 + 0.0im], 7.117322731176046e-9)</code></pre><p>The dense solution extraction mechanism also works in the complex case.</p><p>Let&#39;s try a more complicated example from the paper on the complex-valued Lasserre hierarchy (example 4.1):</p><pre><code class="language-julia-repl hljs">julia&gt; @complex_polyvar z[1:2];
+
+julia&gt; prob = poly_problem(3 - z[1]*conj(z[1]) - .5im*z[1]*conj(z[2])^2 + .5im*z[2]^2*conj(z[1]),
+                           zero=[z[1]*conj(z[1])-.25z[1]^2-.25conj(z[1])^2-1, # abs(z₁)^2 - z₁^2/4 - conj(z₁)^2/4 = 1
+                                 z[1]*conj(z[1])+z[2]*conj(z[2])-3, # abs(z₁)^2 + abs(z₂)^2 = 3
+                                 im*z[2]-im*conj(z[2])], # i z₂ - i conj(z₂) = 0
+                           nonneg=[z[2]+conj(z[2])]); # z₂ + conj(z₂) ≥ 0
+
+julia&gt; poly_optimize(:Clarabel, prob, 3)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): 0.42817470663218404
+Time required for optimization: 1.2524744 seconds
+
+julia&gt; poly_all_solutions(ans)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([2.2522776434581143e-16 - 0.8164965543178686im, 1.527525200200192 + 3.4269901696444247e-22im], 1.3954041122588023e-7)</code></pre><p>Indeed, this solution gives the same objective value and satisfies the constraints, so we found the optimum! Again, note that the longer optimization times are due to compilation times, as some of the methods for handling complex-valued variables needed to be compiled first.</p><p>And finally something with matrices:</p><pre><code class="language-julia-repl hljs">julia&gt; res = poly_optimize(:Clarabel, poly_problem(-z[1]*conj(z[1]) - z[2]*conj(z[2]),
+                                                   psd=[[1-2*(z[1]*z[2]+conj(z[1]*z[2]))  z[1]
+                                                         conj(z[1])  4-z[1]*conj(z[1])-z[2]*conj(z[2])]]), 3)
+Polynomial optimization result
+Relaxation method: Dense
+Used optimization method: ClarabelMoment
+Status of the solver: SOLVED
+Lower bound to optimum (in case of good status): -3.9999999661436303
+Time required for optimization: 0.3807631 seconds
+
+julia&gt; poly_all_solutions(res)
+5-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([0.26030598038884634 - 0.00026736336860256715im, 0.3407935395847438 + 0.00035003309799230153im], 3.816100332088393)
+ ([-0.2603059803888315 + 0.0002673633686024347im, -0.34079353958474984 - 0.00035003309799188205im], 3.8161003320883964)
+ ([-0.06036535235750472 + 6.200197140731072e-5im, -0.18480144151354266 - 0.00018981175865375325im], 3.962204377720153)
+ ([0.06036535235750221 - 6.200197140723483e-5im, 0.1848014415135279 + 0.00018981175865374902im], 3.962204377720159)
+ ([-4.503345903954037e-15 + 5.126149114067468e-17im, 8.070569843533215e-15 - 6.681107940528965e-18im], 3.9999999661436303)
+
+julia&gt; poly_all_solutions(:heuristic, res)
+1-element Vector{Tuple{Vector{ComplexF64}, Float64}}:
+ ([8.786670321838077e-19 - 0.0im, -6.275532682330681e-16 - 0.0im], 3.9999999661436303)
+
+julia&gt; optimality_certificate(res)
+:Unknown</code></pre><p>Note that the solution extraction algorithm in principle also works in the complex case even though the moment matrix is no longer of Hankel form; the theory is powerful enough to handle this &quot;minor detail.&quot; The built-in heuristic will still try to find good solutions and can sometimes do so even in the case of multiple solutions if they only differ in the phase of variables. However, as in the real case, there is no guarantee that the solutions can be decomposed in atomic measures, and therefore the extraction or certification may also fail, which is shown here.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="index.html">« Introduction</a><a class="docs-footer-nextpage" href="reference.html">Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Sunday 30 March 2025 14:49">Sunday 30 March 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
