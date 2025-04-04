@@ -46,7 +46,7 @@ PolynomialOptimizationSCS = "SCS"
 [compat]
 BufferedStreams = "1"
 COPT = "1.1.11"
-Clarabel = "0.1 - 0.9"
+Clarabel = "0.1 - 0.9, 0.10"
 Combinatorics = "1"
 ConjugateGradients = "0.1.1"
 Documenter = "1.3"
@@ -83,5 +83,4 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Clarabel", "Combinatorics", "COPT", "DynamicPolynomials", "Documenter", "GALAHAD", "Hypatia", "MAT", "MKL", "Mosek",
-        "Random", "ProxSDP", "SCS", "Test"]
+test = ["Clarabel", "Combinatorics", "COPT", "DynamicPolynomials", "Documenter", "GALAHAD", "Hypatia", "MAT", "MKL", "Mosek", "Random", "ProxSDP", "SCS", "Test"]
