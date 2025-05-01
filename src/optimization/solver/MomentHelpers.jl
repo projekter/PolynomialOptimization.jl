@@ -1665,6 +1665,7 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD(),
     counters::Counters=Counters()) where {P<:IntPolynomial,V<:Real}
     dim = length(grouping) * (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
+    @assert(dim > 0)
     if (dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))))
         if representation isa RepresentationPSD
             indextype = PSDIndextypeVector(:U, zero(V)) # we don't care about the scaling if everything is rewritten
