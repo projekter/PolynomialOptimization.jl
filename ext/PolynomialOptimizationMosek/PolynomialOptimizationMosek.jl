@@ -1,7 +1,8 @@
 module PolynomialOptimizationMosek
 
 using Mosek, MultivariatePolynomials, LinearAlgebra, SparseArrays, PolynomialOptimization.Solver,
-    PolynomialOptimization.Newton, PolynomialOptimization.Solvers.SpecBM, StandardPacked
+    PolynomialOptimization.Newton, PolynomialOptimization.FacialReduction, PolynomialOptimization.IntPolynomials,
+    PolynomialOptimization.Solvers.SpecBM, StandardPacked
 using PolynomialOptimization: @assert, @inbounds, @allocdiff
 using PolynomialOptimization.IntPolynomials: veciter
 using Mosek: msk_global_env, Env, deletetask
@@ -25,6 +26,7 @@ if isdefined(Mosek, :appendafes)
     end
 end
 include("./Newton.jl")
+include("./FacialReduction.jl")
 include("./Tightening.jl")
 
 function __init__()
@@ -38,6 +40,7 @@ function __init__()
     end
     pushfirst!(solver_methods, :Mosek, :MosekSOS)
     pushfirst!(Newton.newton_methods, :Mosek)
+    pushfirst!(FacialReduction.reduction_methods, :Mosek)
     pushfirst!(PolynomialOptimization.tightening_methods, :Mosek)
 end
 

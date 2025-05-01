@@ -96,3 +96,8 @@ Note that using these functions is usually not necessary; construct a [`Newton`]
 Newton.halfpolytope
 Newton.halfpolytope_from_file
 ```
+
+## Facial reduction (manually)
+```@docs
+FacialReduction.facial_reduction!!
+```
