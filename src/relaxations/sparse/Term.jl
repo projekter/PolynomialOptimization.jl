@@ -43,10 +43,12 @@ mutable struct SparsityTerm{
     groupings::G
     const method::AbstractVector{TermMode} # no specialization
     const varclique_method::VarcliqueMethods
+    const chordal_completion::CliqueTrees.EliminationAlgorithm
 
     function SparsityTerm(relaxation::AbstractRelaxation{P},
         support_union::AbstractSet{I}; method::Union{TermMode,<:AbstractVector{TermMode}},
-        varclique_method::VarcliqueMethods=missing, verbose::Bool=false) where
+        varclique_method::VarcliqueMethods=missing, verbose::Bool=false,
+        chordal_completion::CliqueTrees.EliminationAlgorithm=CliqueTrees.MF()) where
         {Nr,Nc,I<:Integer,MV<:IntMonomialVector{Nr,Nc,I},P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,MV}}}
         problem = poly_problem(relaxation)
         parent = groupings(relaxation)
@@ -76,7 +78,7 @@ mutable struct SparsityTerm{
         end
         @verbose_info("Obtained graphs in ", graphtime, " seconds. Generating groupings.")
         grouptime = @elapsed begin
-            newgroupings = _extend_graphs!(parent, parent, graphs, methods, varclique_method)
+            newgroupings = _extend_graphs!(parent, parent, graphs, methods, varclique_method, chordal_completion)
         end
         @verbose_info("Generated new groupings in ", grouptime, " seconds; embedding with old.")
         intersecttime = @elapsed begin
@@ -85,7 +87,8 @@ mutable struct SparsityTerm{
         @verbose_info("Obtained embedding in ", intersecttime, " seconds")
 
         new{I,P,typeof(parent),typeof(support_union),eltype(localizing_supports),typeof(gr)}(
-            problem, relaxation, parent, support_union, localizing_supports, graphs, gr, methods, varclique_method
+            problem, relaxation, parent, support_union, localizing_supports, graphs, gr, methods, varclique_method,
+            chordal_completion
         )
     end
 end
@@ -121,7 +124,8 @@ function Base.iterate(b::_SquareBasis{M}, state=missing) where {I<:Integer,M<:In
 end
 
 """
-    SparsityTerm(relaxation::AbstractRelaxation; method, varclique_method=missing, verbose=false)
+    SparsityTerm(relaxation::AbstractRelaxation; method, varclique_method=missing, verbose=false,
+        chordal_completion=CliqueTrees.MF())
 
 Low-level constructor for `SparsityTerm` objects that provides more nuanced control over which methods are used. `method` must
 either be a valid [`TermMode`](@ref) (`TERM_MODE_NONE` is forbidden) or a vector or term modes. In the latter case, the vector
@@ -130,11 +134,13 @@ objective, the second to the first zero constraints, ..., followed by the nonneg
 If variable cliques are present, different methods can be assigned to them. Note that a variable clique can cover the objective
 and all constraints; in the case of conflicting assignments, the clique assignment takes precedence (but a clique mode may also
 be `missing` individually, in which case the default is taken).
+The elimination algorithm that is used for chordal cliques can be specified by `chordal_completion`.
 
 See also [`SparsityTermBlock`](@ref), [`SparsityTermChordal`](@ref), [`SparsityCorrelativeTerm`](@ref).
 """
 function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,<:AbstractVector{TermMode}},
-    varclique_method::VarcliqueMethods=missing, verbose::Bool=false) where
+    varclique_method::VarcliqueMethods=missing, verbose::Bool=false,
+    chordal_completion::CliqueTrees.EliminationAlgorithm=CliqueTrees.MF()) where
     {Nr,Nc,I<:Integer,P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}
     # Let 𝒜 = supp(obj) ∪ supp(constrs)
     # support_union corresponds to 𝒮. For real-valued problems, the initialization is
@@ -170,7 +176,7 @@ function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,
         end
     end
     @verbose_info("Generated support union in ", supptime, " seconds")
-    return SparsityTerm(relaxation, support_union; method, varclique_method, verbose)
+    return SparsityTerm(relaxation, support_union; method, varclique_method, verbose, chordal_completion)
 end
 
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
@@ -224,7 +230,7 @@ end
 _supports_to_graphs!(relaxation::SparsityTerm, methods, varclique_methods) = _supports_to_graphs!(relaxation.graphs,
     relaxation.support_union, relaxation.localizing_supports, relaxation.parentgroupings, methods, varclique_methods)
 
-function _extend_graphs!(::Val{TERM_MODE_BLOCK}, g::Graphs.SimpleGraph)
+function _extend_graphs!(::Val{TERM_MODE_BLOCK}, g::Graphs.SimpleGraph, ::CliqueTrees.EliminationAlgorithm)
     ne = 0
     # connected components are not overlapping
     connections = Graphs.connected_components(g)
@@ -242,7 +248,7 @@ function _extend_graphs!(::Val{TERM_MODE_BLOCK}, g::Graphs.SimpleGraph)
     return connections
 end
 
-function _extend_graphs!(::Val{TERM_MODE_CLIQUES}, g::Graphs.SimpleGraph{Int})
+function _extend_graphs!(::Val{TERM_MODE_CLIQUES}, g::Graphs.SimpleGraph{Int}, ::CliqueTrees.EliminationAlgorithm)
     # cliques can be overlapping
     cliques = sort!(sort!.(Graphs.maximal_cliques(g)))
     edge_sets = [Set{Int}() for _ in 1:Graphs.nv(g)]
@@ -260,9 +266,10 @@ function _extend_graphs!(::Val{TERM_MODE_CLIQUES}, g::Graphs.SimpleGraph{Int})
     return cliques
 end
 
-_extend_graphs!(::Val{TERM_MODE_CHORDAL_CLIQUES}, g::Graphs.SimpleGraph) = chordal_cliques!(g)
+_extend_graphs!(::Val{TERM_MODE_CHORDAL_CLIQUES}, g::Graphs.SimpleGraph, alg::CliqueTrees.EliminationAlgorithm) =
+    chordal_cliques!(g; alg)
 
-function _extend_graphs!(::Val{TERM_MODE_DENSE}, g::Graphs.SimpleGraph{T}) where {T<:Integer}
+function _extend_graphs!(::Val{TERM_MODE_DENSE}, g::Graphs.SimpleGraph{T}, ::CliqueTrees.EliminationAlgorithm) where {T<:Integer}
     # Make the graph into a complete one. As we know that every modification will always be towards more compelte graphs, we
     # can share the memory for every entry in the adjacency list.
     edges = collect(one(T):T(Graphs.ne(g)))
@@ -271,7 +278,8 @@ function _extend_graphs!(::Val{TERM_MODE_DENSE}, g::Graphs.SimpleGraph{T}) where
 end
 
 @eval function _extend_graphs!(previous::RelaxationGroupings{Nr,Nc,I}, parent::RelaxationGroupings{Nr,Nc,I}, g::Vector{G},
-    methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods) where {Nr,Nc,I<:Integer,G<:Graphs.SimpleGraph}
+    methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods,
+    chordal_completion::CliqueTrees.EliminationAlgorithm) where {Nr,Nc,I<:Integer,G<:Graphs.SimpleGraph}
     # better enable bounds checking in this method
     ipoly = 1
     igroup = 1
@@ -288,7 +296,7 @@ end
                     else
                         method = methods[ipoly]
                     end
-                    cliques = _extend_graphs!(Val(method), g[igroup])
+                    cliques = _extend_graphs!(Val(method), g[igroup], chordal_completion)
                     for clique in cliques
                         ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
                             push!(newgroup, @view(grouping[clique]))
@@ -308,7 +316,7 @@ end
                     missingclique |= ismissing(vcm)
                     nonmissingclique |= !ismissing(vcm)
                     if !ismissing(vcm)
-                        cliques = _extend_graphs!(Val(vcm), g[igroup])
+                        cliques = _extend_graphs!(Val(vcm), g[igroup], chordal_completion)
                         for clique in cliques
                             ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
                                 push!(newgroup, @view(grouping[clique]))
@@ -344,9 +352,10 @@ end
     return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, previous.var_cliques)
 end
 
-function _extend_graphs!(relaxation::SparsityTerm, methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods)
+function _extend_graphs!(relaxation::SparsityTerm, methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods,
+    chordal_completion::CliqueTrees.EliminationAlgorithm)
     newgroupings = embed(_extend_graphs!(groupings(relaxation), relaxation.parentgroupings, relaxation.graphs, methods,
-        varclique_methods), relaxation.parentgroupings, relaxation.parent isa AbstractRelaxationBasis)
+        varclique_methods, chordal_completion), relaxation.parentgroupings, relaxation.parent isa AbstractRelaxationBasis)
     if newgroupings != relaxation.groupings
         relaxation.groupings = newgroupings
         return relaxation
@@ -407,19 +416,21 @@ If correlative and term sparsity are to be used together, use [`SparsityCorrelat
 SparsityTermBlock(args...; kwargs...) = SparsityTerm(args...; method=TERM_MODE_BLOCK, kwargs...)
 
 """
-    SparsityTermChordal(relaxation::AbstractProblem; chordal_completion=true, verbose=false)
+    SparsityTermChordal(relaxation::AbstractProblem; chordal_completion=CliqueTrees.MF(), verbose=false)
 
 Analyze the term sparsity of the problem using chordal cliques.
 [Chordal term sparsity](https://doi.org/10.1137/20M1323564) is a recent iterative sparsity analysis that groups terms
 with shared supports. Even in its last iteration, it may give strictly smaller values than the dense problem.
 The basis elements are grouped in terms of chordal cliques of the term sparsity graph. This uses maximal cliques; as obtaining
 maximal cliques of an arbitrary graph is not efficient, the graph is extended to a chordal graph if `chordal_completion` is
-`true` using a heuristic. Disabling the chordal completion can lead to smaller problem sizes.
+a valid elimination algorithm from `CliqueTrees` or `true` (deprecated, equals `CliqueTrees.MF()`) using a heuristic. Disabling
+the chordal completion can lead to smaller problem sizes.
 
 If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) or nest the sparsity objects.
 """
-SparsityTermChordal(args...; chordal_completion::Bool=true, kwargs...) =
-    SparsityTerm(args...; method=chordal_completion ? TERM_MODE_CHORDAL_CLIQUES : TERM_MODE_CLIQUES, kwargs...)
+SparsityTermChordal(args...; chordal_completion::Union{Bool,<:CliqueTrees.EliminationAlgorithm}=CliqueTrees.MF(), kwargs...) =
+    SparsityTerm(args...; method=chordal_completion !== false ? TERM_MODE_CHORDAL_CLIQUES : TERM_MODE_CLIQUES,
+        chordal_completion=(chordal_completion isa Bool ? CliqueTrees.MF() : chordal_completion), kwargs...)
 
 const ModeSpecifiers = Union{Bool,TermMode,<:AbstractSet{<:Integer},<:AbstractVector{TermMode}}
 
@@ -486,14 +497,15 @@ end
 
 """
     iterate!(relaxation::Union{SparsityTerm,SparsityCorrelativeTerm}; [method,]
-        objective=true, zero=true, nonneg=true, psd=true, varclique_methods=missing)
+        objective=true, zero=true, nonneg=true, psd=true, varclique_methods=missing[,
+        chordal_completion])
 
 [`SparsityTerm`](@ref) implementations allow to customize the iteration procedure by the keyword arguments. The arguments
 `objective`, `zero`, `nonneg`, and `psd` can be boolean values (`false` means that these elements will not contribute to the
 iteration, `true` that they will). `zero`, `nonneg`, and `psd` can also be `AbstractSet`s of integers, indicating that only the
 constraints with the indices specified in the set will contribute to the iteration. This all implies that the method used for
 their iteration will be given by `method`. Custom methods can be assigned if the parameters are set to a [`TermMode`](@ref) or
-a vector of `TermMode`s.
+a vector of `TermMode`s. The elimination algorithm for chordal cliques may be overwritten by `chordal_completion`.
 
 The parameter `method` therefore determines the default that is assigned to the elements, and if not specified, it will be
 determined by the default method with which `relaxation` was constructed. Instead of a single `TermMode`, `method` may also be
@@ -506,7 +518,8 @@ precedence (but a clique mode may also be `missing` individually, in which case 
 """
 function iterate!(relaxation::SparsityTerm; method::Union{TermMode,<:AbstractVector{TermMode}}=relaxation.method,
     objective::Union{Bool,TermMode}=true, zero::ModeSpecifiers=true, nonneg::ModeSpecifiers=true, psd::ModeSpecifiers=true,
-    varclique_methods::VarcliqueMethods=missing)
+    varclique_methods::VarcliqueMethods=missing,
+    chordal_completion::CliqueTrees.EliminationAlgorithm=relaxation.chordal_completion)
     problem = poly_problem(relaxation)
     _iterate_supports!(relaxation)
     # Even if new_supports is the same as ts.support_union, we might run into the unlikely scenario that the user changed the
@@ -514,7 +527,7 @@ function iterate!(relaxation::SparsityTerm; method::Union{TermMode,<:AbstractVec
     # same support.
     methods = _jointmethods(problem, objective, zero, nonneg, psd, method)
     _supports_to_graphs!(relaxation, methods, varclique_methods)
-    return _extend_graphs!(relaxation, methods, varclique_methods)
+    return _extend_graphs!(relaxation, methods, varclique_methods, chordal_completion)
 end
 
 default_solution_method(::SparsityTerm) = :heuristic

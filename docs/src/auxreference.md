@@ -14,11 +14,10 @@ issubset_sorted
 ```
 
 ## Chordal graphs
-The functionality for chordal graphs is taken from the [`ChordalGraph.jl`](https://github.com/wangjie212/ChordalGraph) package
-(MIT license). Some features that we don't need were removed, inefficient implementations were improved.
+The following functions provide a thin wrapper to [`CliqueTrees.jl`](https://github.com/AlgebraicJulia/CliqueTrees.jl).
 ```@docs
-Relaxation.chordal_completion!
 Relaxation.chordal_cliques!
+Relaxation.chordal_cliques
 ```
 
 ## Sorting of multiple vectors

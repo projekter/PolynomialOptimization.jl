@@ -2,7 +2,7 @@ module Relaxation
 
 using ..IntPolynomials, .IntPolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector, SortingAlgorithms
-import StatsBase, Graphs
+import StatsBase, Graphs, CliqueTrees
 using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted
 import ..PolynomialOptimization: poly_problem, iterate!
 
