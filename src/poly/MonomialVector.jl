@@ -418,6 +418,46 @@ function _conj(v::IntMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along...) 
             along...)[1]
     )
 end
+function Base.:(*)(v::IntMonomialVector{Nr,Nc,I₁}, m::IntMonomial{Nr,Nc,I₂}) where {Nr,Nc,I₁<:Integer,I₂<:Integer}
+    I = promote_type(I₁, I₂)
+    if v.e isa ExponentsAll
+        targetE = ExponentsAll{Nr+2Nc,I}()
+    elseif v.e isa ExponentsDegree
+        if v.e.maxdeg ≥ maxdegree(v) + degree(m)
+            targetE = I === I₁ ? v.e : ExponentsDegree{Nr+2Nc,I}(v.e.mindeg, v.e.maxdeg)
+        else
+            targetE = ExponentsDegree{Nr+2Nc,I}(v.e.mindeg, maxdegree(v) + degree(m))
+        end
+    elseif v.e isa ExponentsMultideg
+        # If we are already here, we change the exponents. This is likely faster than changing a whole monomial vector (and
+        # might be necessary anyway), though we cannot really be sure if the vector is short. Maybe we should incorporate a
+        # heuristic to decide? This would still be type-stable.
+        targetEmin = copy(v.e.minmultideg)
+        targetEmax = copy(v.e.maxmultideg)
+        for (var, e) in m
+            targetEmin[var.index] += e
+            targetEmax[var.index] += e
+        end
+        targetE = ExponentsMultideg{Nr+2Nc,I}(v.e.mindeg + m.degree, v.e.maxdeg + m.degree, targetEmin, targetEmax)
+        if v isa IntMonomialVectorComplete
+            return IntMonomialVector{Nr,Nc}(targetE)
+        else
+            return IntMonomialVector{Nr,Nc}(unsafe, targetE,
+                I₁ === I ? v.indices :
+                (v.indices isa AbstractUnitRange ? (convert(I, first(v.indices)):convert(I, last(v.indices))) :
+                 convert(Vector{I}, v.indices))
+            )
+        end
+    end
+    # The result must in any case be a subset.
+    mexp = collect(exponents(m)) # we will need it often, so it's worth storing the data
+    indices = Vector{I}(undef, length(v))
+    @inbounds for (i, mᵢ) in enumerate(v)
+        indices[i], _ = exponents_sum(targetE, exponents(mᵢ), mexp)
+    end
+    return IntMonomialVector{Nr,Nc}(unsafe, targetE, indices)
+end
+Base.:(*)(m::IntMonomial{Nr,Nc}, v::IntMonomialVector{Nr,Nc}) where {Nr,Nc} = v * m
 
 Base.in(x::IntMonomial{Nr,Nc}, v::IntMonomialVectorComplete{Nr,Nc}) where {Nr,Nc} =
     x.e == v.e || !iszero(convert_index(v.e, x.e, x.index, degree(x)))
