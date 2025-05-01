@@ -205,7 +205,7 @@ Base.copy(x::IntMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} = IntMonomialVector{N
     @boundscheck checkbounds(x, i)
     @inbounds return IntMonomial{Nr,Nc}(unsafe, x.e, x.indices[i])
 end
-@inline function Base.getindex(x::IntMonomialVector{Nr,Nc}, i) where {Nr,Nc}
+@inline function Base.getindex(x::IntMonomialVector{Nr,Nc}, i::Union{<:AbstractRange,Colon,<:AbstractArray}) where {Nr,Nc}
     @boundscheck checkbounds(x, i)
     @inbounds return IntMonomialVector{Nr,Nc}(unsafe, x.e, x.indices[i])
 end
