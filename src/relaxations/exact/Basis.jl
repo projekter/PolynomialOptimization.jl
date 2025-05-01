@@ -14,15 +14,15 @@ function basis(relaxation::AbstractRelaxationBasis, i::Int)
     return relaxation.basis
 end
 
-function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer, parent) where
+function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Integer) where
     {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc,I},Prob<:IntPolynomial{<:Any,Nr,Nc}}
-    return embed(RelaxationGroupings(
+    return RelaxationGroupings(
         IntMonomialVector{Nr,Nc,I}[basis],
         [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
         [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
         [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
-    ), parent, true)
+    )
 end
 
 MultivariatePolynomials.degree(relaxation::AbstractRelaxationBasis) = relaxation.degree
@@ -49,4 +49,3 @@ end
 
 include("./Dense.jl")
 include("./Custom.jl")
-include("./Newton.jl")

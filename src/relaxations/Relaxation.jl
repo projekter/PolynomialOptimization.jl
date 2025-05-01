@@ -339,7 +339,23 @@ function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
 end
 Base.isreal(relaxation::AbstractRelaxation) = isreal(relaxation.problem)
 
-include("./basis/Basis.jl")
-include("./sparse/Sparse.jl")
+"""
+    AbstractRelaxationSparse{Prob} <: AbstractRelaxation{Prob}
+
+An `AbstractRelaxationSparse` is a relaxation of a polynomial optimization problem that applies sparsity methods to reduce the
+size of the associated problem.
+"""
+abstract type AbstractRelaxationSparse{Prob<:Problem} <: AbstractRelaxation{Prob} end
+
+basis(relaxation::AbstractRelaxationSparse) = basis(relaxation.parent)
+
+function basis(relaxation::AbstractRelaxationSparse, i::Int)
+    1 ≤ i ≤ length(relaxation.groupings.var_cliques) || throw(ArgumentError("Unknown clique index: $i"))
+    return filter(Base.Fix2(IntPolynomials.effective_variables_in, Set(relaxation.groupings.var_cliques[i])),
+        basis(relaxation))
+end
+
+include("./exact/Exact.jl")
+include("./approximate/Approximate.jl")
 
 end

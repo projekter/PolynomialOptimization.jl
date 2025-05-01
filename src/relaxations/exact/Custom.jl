@@ -20,7 +20,7 @@ struct Custom{P<:Problem,MV<:IntMonomialVector,G<:RelaxationGroupings} <: Abstra
             end
         end
         degree = maxdegree(basis) # ≡ maxdegree_complex, but maxdegree cannot break branch prediction
-        gr = groupings(problem, basis, degree, nothing)
+        gr = groupings(problem, basis, degree)
         new{P,typeof(basis),typeof(gr)}(problem, Int(degree), basis, gr)
     end
 end

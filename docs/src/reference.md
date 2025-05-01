@@ -37,20 +37,28 @@ RelaxationGroupings
 ```@docs
 AbstractRelaxationBasis
 Dense
-Newton
 Custom
 ```
 
 ### Relaxations based on individual sparsity
 ```@docs
 AbstractRelaxationSparse
+```
+One exact sparsity method is available: a highly-optimized Newton polytope algorithm which will often reduce the size of the
+basis for the moment matrix quite well, but cannot help for the constraints.
+A reverse-sparsity method is also exact.
+```@docs
+Newton
+CliqueMerged
+```
+Several inexact methods are available which will potentially worsen the quality of the bounds.
+```@docs
 SparsityCorrelative
 SparsityTerm
 SparsityTermBlock
 SparsityTermChordal
 SparsityCorrelativeTerm
 TermMode
-CliqueMerged
 iterate!(::SparsityTerm)
 ```
 

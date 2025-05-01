@@ -32,7 +32,7 @@ struct Dense{P<:Problem,MV<:IntMonomialVector,G<:RelaxationGroupings} <: Abstrac
             end
             basis = monomials(Val(Nr), Val(Nc), 0:degree; maxmultideg, I)
         end
-        gr = groupings(problem, basis, degree, nothing)
+        gr = groupings(problem, basis, degree)
         new{P,typeof(basis),typeof(gr)}(problem, Int(degree), basis, gr)
     end
 end
