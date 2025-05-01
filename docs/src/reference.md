@@ -44,11 +44,13 @@ Custom
 ```@docs
 AbstractRelaxationSparse
 ```
-One exact sparsity method is available: a highly-optimized Newton polytope algorithm which will often reduce the size of the
-basis for the moment matrix quite well, but cannot help for the constraints.
-A reverse-sparsity method is also exact.
+Two exact sparsity methods are available: a highly-optimized Newton polytope algorithm which will often reduce the size of the
+basis for the moment matrix quite well, but cannot help for the constraints; and a less efficient facial reduction which is the
+best currently known exact sparsity method (also being able to reduce constraints).
+A reverse-sparsity method complements the set of exact methods.
 ```@docs
 Newton
+FacialReduction
 CliqueMerged
 ```
 Several inexact methods are available which will potentially worsen the quality of the bounds.
@@ -98,6 +100,8 @@ Newton.halfpolytope_from_file
 ```
 
 ## Facial reduction (manually)
+Note that using this function is usually not necessary; construct a [`FacialReduction`](@ref Relaxation.FacialReduction)
+relaxation instead.
 ```@docs
 FacialReduction.facial_reduction!!
 ```
