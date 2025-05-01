@@ -83,6 +83,13 @@ Base.@propagate_inbounds function degree_from_index(e::AbstractExponentsDegreeBo
     return searchsortedfirst(counts, index) -1
 end
 
+degree_range(::Unsafe, e::AbstractExponentsDegreeBounded, degree::AbstractUnitRange) =
+    @invoke degree_range(unsafe::Unsafe, e::AbstractExponents,
+        (max(first(degree), e.mindeg):min(last(degree), e.maxdeg))::AbstractUnitRange)
+
+degree_range(e::AbstractExponentsDegreeBounded, degree::AbstractUnitRange) =
+    @invoke degree_range(e::AbstractExponents, (max(first(degree), e.mindeg):min(last(degree), e.maxdeg))::AbstractUnitRange)
+
 function exponents_from_index(e::AbstractExponentsDegreeBounded{<:Any,I}, index::I, degree::Int) where {I<:Integer}
     index > zero(I) || throw(BoundsError(e, index))
     e.mindeg ≤ degree ≤ e.maxdeg || throw(BoundsError(e, index))

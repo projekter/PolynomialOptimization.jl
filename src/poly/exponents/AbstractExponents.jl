@@ -1,4 +1,4 @@
-export AbstractExponents, index_counts, exponents_to_index, degree_from_index, iterate!, veciter, convert_index,
+export AbstractExponents, index_counts, exponents_to_index, degree_from_index, degree_range, iterate!, veciter, convert_index,
     compare_indices, exponents_sum, exponents_product
 
 """
@@ -176,6 +176,37 @@ maximally allowed index in the exponent set, a degree larger than the maximal de
 (not necessarily `lastindex +1`).
 """
 degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
+
+"""
+    degree_range(unsafe, ::AbstractExponents, degree)
+
+Unsafe variant of [`degree_range`](@ref degree_range(::AbstractExponents, ::Integer)): assumes that the required cache for the
+degree that is associated with `index` has already been initialized, else the function may access invalid memory.
+"""
+degree_range(::Unsafe, e::AbstractExponents, degree::Integer) = degree_range(unsafe, e, degree:degree)
+
+function degree_range(::Unsafe, e::AbstractExponents, degree::AbstractUnitRange)
+    counts = index_counts(unsafe, e)
+    @inbounds return range(iszero(first(degree)) ? one(eltype(counts)) : counts[first(degree), 1] + one(eltype(counts)),
+                           counts[last(degree)+1, 1])
+end
+
+"""
+    degree_range(::AbstractExponents, degree)
+
+Returns the index range that is associated with the subspace of monomials of degree `degree`, which may be an integer or a unit
+range.
+"""
+degree_range(e::AbstractExponents, degree::Integer) = degree_range(e, degree:degree)
+
+function degree_range(e::AbstractExponents, degree::AbstractUnitRange)
+    counts, success = index_counts(e, last(degree) +1)
+    if !success
+        degree = min(first(degree), size(counts, 1) -1):min(last(degree), size(counts, 1) -1)
+    end
+    @inbounds return range(iszero(first(degree)) ? one(eltype(counts)) : counts[first(degree), 1] + one(eltype(counts)),
+                           counts[last(degree)+1, 1])
+end
 
 """
     convert_index(unsafe, target::AbstractExponents{N}, source::AbstractExponents{N,I},

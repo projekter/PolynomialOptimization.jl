@@ -54,9 +54,10 @@ exponents_product
 Note that `exponents_from_index` returns a lazy implementation of an `AbstractVector{Int}`; if the same exponents must be
 accessed multple times, it might be beneficial to `collect` the result or copy it to a pre-allocated vector.
 
-Further information can be obtained about one or two indices or exponent sets:
+Further information can be obtained about one or multiple indices or exponent sets:
 ```@docs
 degree_from_index(::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
+degree_range(::AbstractExponents, ::Integer)
 convert_index(::AbstractExponents{N,I}, ::AbstractExponents{N,IS}, ::IS, ::Int) where {N,I<:Integer,IS<:Integer}
 compare_indices(::AbstractExponents{N,I1}, ::I1, ::_CompareOp, ::AbstractExponents{N,I2}, ::I2, ::Int) where {N,I1<:Integer,I2<:Integer}
 Base.:(==)(::AbstractExponents{N,I1}, ::AbstractExponents{N,I2}) where {N,I1<:Integer,I2<:Integer}
@@ -78,6 +79,7 @@ exactly what you are doing.
 index_counts
 exponents_from_index(::Unsafe, ::AbstractExponents{<:Any,I}, ::I, ::Int) where {I<:Integer}
 degree_from_index(::Unsafe, ::AbstractExponents{N,I}, ::I) where {N,I<:Integer}
+degree_range(::Unsafe, ::AbstractExponents, ::Integer)
 convert_index(::Unsafe, ::AbstractExponents{N,I}, ::AbstractExponents{N,IS}, ::IS, ::Int) where {N,I<:Integer,IS<:Integer}
 compare_indices(::Unsafe, ::AbstractExponents{N,I1}, ::I1, ::_CompareOp, ::AbstractExponents{N,I2}, ::I2, ::Int) where {N,I1<:Integer,I2<:Integer}
 Base.length(::Unsafe, ::AbstractExponentsDegreeBounded)
