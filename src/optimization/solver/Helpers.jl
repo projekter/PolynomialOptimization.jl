@@ -99,9 +99,6 @@ end
 Base.iterate(m::ScalarMatrix) = m.x, nothing
 Base.iterate(::ScalarMatrix, ::Nothing) = nothing
 
-collect_grouping(g::AbstractVector{M} where M<:IntMonomial) = g
-collect_grouping(g) = collect(g)
-
 """
     count_uniques(vec::AbstractVector[, callback])
     count_uniques(vec₁::AbstractVector, vec₂::AbstractVector[, callback])

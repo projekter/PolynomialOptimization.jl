@@ -1952,7 +1952,7 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
         for (j, grouping) in enumerate(groupingsᵢ)
-            this_info[j] = (:fix, moment_add_equality!(state, collect_grouping(grouping), constrᵢ, counters))
+            this_info[j] = (:fix, moment_add_equality!(state, grouping, constrᵢ, counters))
         end
         infoᵢ += 1
     end
@@ -2029,8 +2029,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     # SOS term for objective
     constantP = one(P)
     @inbounds info[1] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupings.obj))
-    for (i, grouping) in enumerate(groupings.obj)
-        g = collect_grouping(grouping)
+    for (i, g) in enumerate(groupings.obj)
         @inbounds this_info[i] = moment_add_matrix!(state, g, constantP,
             representation isa RepresentationMethod ? representation : representation((:objective, 0, i), length(g)), counters)
     end
@@ -2039,8 +2038,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     # localizing matrices
     @inbounds for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.nonnegs, problem.constr_nonneg))
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
-        for (j, grouping) in enumerate(groupingsᵢ)
-            g = collect_grouping(grouping)
+        for (j, g) in enumerate(groupingsᵢ)
             this_info[j] = moment_add_matrix!(state, g, constrᵢ,
                 representation isa RepresentationMethod ? representation : representation((:nonneg, i, j), length(g)),
                 counters)
@@ -2049,8 +2047,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
     end
     for (i, (groupingsᵢ, constrᵢ)) in enumerate(zip(groupings.psds, problem.constr_psd))
         info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
-        for (j, grouping) in enumerate(groupingsᵢ)
-            g = collect_grouping(grouping)
+        for (j, g) in enumerate(groupingsᵢ)
             this_info[j] = moment_add_matrix!(state, g, constrᵢ,
                 representation isa RepresentationMethod ? representation :
                                                           representation((:psd, i, j), length(g) * size(constrᵢ, 1)), counters)
