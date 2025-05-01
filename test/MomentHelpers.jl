@@ -128,7 +128,7 @@ function momenttest(instance, grouping, constraint, type)
                   MomentSolverSetup(instance, psd=PSDIndextypeMatrixCartesian(:U, 17), complex=true))
     elseif type === :moment_equality
         state = MomentSolverSetup(instance, fixed=true)
-        moment_add_equality!(state, grouping, constraint)
+        moment_add_equality!(state, [grouping], constraint)
         @test state.lastcall === :add_constr_fix_finalize
         return
     else

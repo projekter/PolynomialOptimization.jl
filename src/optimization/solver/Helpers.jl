@@ -243,3 +243,79 @@ Base.length(smc::SparseMatrixCOO) = length(smc.rowinds)
     dim == 1 || error("Not implemented")
     @inbounds return isempty(smc.rowinds) ? 0 : Int(smc.rowinds[end]) + (1 - Int(Offset))
 end
+
+"""
+    unique_outer_groupings(grouping::AbstractVector{<:IntMonomial}[, result::Set])
+
+Computes a set of all unique groupings that are produced via `groupings * groupings'`. For purely complex-valued groupings,
+this is the full list; as soon as we have a real variable present, it is smaller.
+Returns a set of `FastKey`-wrapped monomial indices, a boolean indicating whether the grouping is effectively real-valued, and
+the number of (real-valued) equalities that arise from this grouping (which should be multiplied by 2 if the groupings are to
+be multiplied by a complex-valued constraint).
+If present, the data will be appended to the `result` parameter.
+"""
+function unique_outer_groupings(grouping::AbstractVector{M}, result::Set{FastKey{I}}=Set{FastKey{I}}()) where {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc,I}}
+    # To avoid rehashings, get an overestimator of the total grouping size first.
+    # TODO (maybe): In the first loop to populate unique_groupings, we determine whether the grouping is real-valued. So we
+    # could instead populate two sets, saving isreal and a lot of conditionals in the second loop.
+    result = sizehint!(result, length(result) + (iszero(Nc) ? trisize(length(grouping)) : length(grouping)^2))
+    real_grouping = true
+    totalsize = 0
+    for (i, g₁) in enumerate(grouping)
+        if !iszero(Nc)
+            g₁real = !iszero(Nr) && isreal(g₁)
+            # Consider the g₂ = ḡ₁ case separately in the complex case. Explanations below.
+            let g₂=g₁
+                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
+                indexug, sh = Base.ht_keyindex2_shorthash!(result.dict, prodidx)
+                if indexug ≤ 0
+                    @inbounds Base._setindex!(result.dict, nothing, prodidx, -indexug, sh)
+                    totalsize += 1
+                end
+            end
+        end
+        # In the real case, we can skip the entries behind i as they would lead to duplicates.
+        # In the complex case, we can also skip them, as they would lead to exact conjugates, which in the end give rise to the
+        # same conditions (but note that i is already handled above).
+        for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
+            # We don't use mindex, as this can have unintended side-effects on the solver state (such as creating a
+            # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
+            # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
+            # will probably appear at some place).
+            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
+            # We need to add the product to the set if it does not exists; we also need to count the number of conditions that
+            # we get out of it.
+            indexug, sh = Base.ht_keyindex2_shorthash!(result.dict, prodidx)
+            if indexug ≤ 0
+                # It does not exist.
+                @inbounds Base._setindex!(result.dict, nothing, prodidx, -indexug, sh)
+                # Assume we have a grouping g = (gᵣ + im*gᵢ) and a polynomial p = pᵣ + im*pᵢ, where the individual parts are
+                # real-valued. Then, add_equality! means that g*p = 0 and ḡ*p = 0. Of course we can also conjugate everything.
+                # We must split each constraint into its real and imaginary parts:
+                # (I)   Re(g*p) = gᵣ*pᵣ - gᵢ*pᵢ
+                # (II)  Im(g*p) = gᵣ*pᵢ + gᵢ*pᵣ
+                # (III) Re(ḡ*p) = gᵣ*pᵣ + gᵢ*pᵢ
+                # (IV)  Im(ḡ*p) = gᵣ*pᵢ - gᵢ*pᵣ
+                # To analyze this (which would be easier if we added and subtracted the equalities, but in the
+                # IntPolynomials setup, the given form is most easy to handle), let's consider linear dependencies.
+                # - If the constraint is real-valued, (III) is equal to (I) and (IV) is -(II), so we only take (I) and (II).
+                # - If the grouping is real-valued, (III) is equal to (I) and (IV) is equal to (II); we only take (I) and (II).
+                # - If both are real-valued, (III) is equal to (I) while (II) and (IV) are zero, so we only take (I).
+                # - If both are complex-valued, all constraints are linearly independent.
+                # Rearranging this, we always take (I); if at least one is complex-valued, we also take (II); if both are, we
+                # take all. Note that we don't have to consider the conjugates of the groupings separately, as they only yield
+                # a global sign in the zero-equality.
+                # For this loop, this means that we will only check whether g₁*ḡ₂ belongs to a real-valued monomial, in which
+                # case we add 1; or to a complex-valued monomial, in which case we add 2. After the loop, we multiply by 2 if
+                # the constraint was also complex-valued.
+                if iszero(Nc) || (!iszero(Nr) && g₁real && isreal(g₂)) # note that g₁ ≠ ḡ₂
+                    totalsize += 1
+                else
+                    totalsize += 2
+                    real_grouping = false
+                end
+            end
+        end
+    end
+    return result, real_grouping, totalsize
+end

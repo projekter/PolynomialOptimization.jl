@@ -11,6 +11,7 @@ optimization.
 @allocdiff
 keepcol!
 issubset_sorted
+Solver.unique_outer_groupings
 ```
 
 ## Chordal graphs

@@ -76,11 +76,11 @@ See also [`sos_add_equality!`](@ref).
 sos_add_matrix!(state::AbstractSolver, args...) = moment_add_matrix!(SOSWrapper(state), args...)
 
 """
-    sos_add_equality!(state::AbstractSolver, grouping::IntMonomialVector,
+    sos_add_equality!(state::AbstractSolver, groupings::AbstractVector{<:IntMonomialVector},
         constraint::IntPolynomial)
 
 Parses a polynomial equality constraint for sums-of-squares and calls the appropriate solver functions to set up the problem
-structure. `grouping` contains the basis that will be squared in the process to generate the prefactor.
+structure. `groupings` contains the bases that will be squared individually in the process to generate the prefactor.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`add_var_free_prepare!`](@ref) (optional)

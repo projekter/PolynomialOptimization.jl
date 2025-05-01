@@ -377,29 +377,11 @@ end
 function poly_decomposition(data, grouping::IntMonomialVector{Nr,Nc,I},
     constraint::IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}, ϵ) where {Nr,Nc,I<:Integer}
     # this is a decomposition of the equality constraint prefactors, which are arbitrary polynomials, no longer SOS.
-    # keep in sync with MomentHelpers -> moment_add_equality
-
-    unique_groupings = sizehint!(Set{FastKey{I}}(), iszero(Nc) ? Solver.trisize(length(grouping)) : length(grouping)^2)
+    unique_groupings = Set{FastKey{I}}()
     real_grouping = true
-    for (i, g₁) in enumerate(grouping)
-        if !iszero(Nc)
-            g₁real = !iszero(Nr) && isreal(g₁)
-            let g₂=g₁
-                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
-                indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
-                indexug ≤ 0 && @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
-            end
-        end
-        for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
-            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
-            indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
-            if indexug ≤ 0
-                @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
-                if !(iszero(Nc) || (!iszero(Nr) && g₁real && isreal(g₂)))
-                    real_grouping = false
-                end
-            end
-        end
+    for groupingᵢ in groupings
+        _, real_groupingᵢ, _ = unique_outer_groupings(groupingᵢ, unique_groupings)
+        real_grouping &= real_groupingᵢ
     end
 
     real_constr = isreal(constraint)
@@ -408,7 +390,6 @@ function poly_decomposition(data, grouping::IntMonomialVector{Nr,Nc,I},
     mons = FastVec{I}(buffer=(real_grouping ? 1 : 2) * length(unique_groupings))
     coeffs = similar(mons, real_constr && real_grouping ? eltype(data) : Complex{eltype(data)})
     i = 1
-
 
     for grouping_idx in unique_groupings
         grouping = IntMonomial{Nr,Nc}(unsafe, e, convert(I, grouping_idx))

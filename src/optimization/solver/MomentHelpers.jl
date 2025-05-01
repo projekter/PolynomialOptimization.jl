@@ -1723,11 +1723,11 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
 end
 
 """
-    moment_add_equality!(state::AbstractSolver, grouping::IntMonomialVector,
+    moment_add_equality!(state::AbstractSolver, groupings::AbstractVector{<:IntMonomialVector},
         constraint::IntPolynomial)
 
 Parses a polynomial equality constraint for moments and calls the appropriate solver functions to set up the problem structure.
-`grouping` contains the basis that will be squared in the process to generate the prefactor.
+`groupings` contains the bases that will be squared individually in the process to generate the prefactor.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`add_constr_fix_prepare!`](@ref) (optional)
@@ -1738,73 +1738,15 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 
 See also [`moment_add_matrix!`](@ref).
 """
-function moment_add_equality!(state::AnySolver{T}, grouping::AbstractVector{M} where {M<:IntMonomial},
+function moment_add_equality!(state::AnySolver{T}, groupings::AbstractVector{<:(AbstractVector{M} where {M<:IntMonomial})},
     constraint::P, counters::Counters=Counters()) where {T,Nr,Nc,I<:Integer,P<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}
-    # keep in sync with SOSCertificate -> poly_decomposition
-
-    # We need to traverse all unique elements in groupings * groupings†. For purely complex-valued groupings, this is the full
-    # list; as soon as we have a real variable present, it is smaller.
-    # To avoid rehashings, get an overestimator of the total grouping size first.
-    # TODO (maybe): In the first loop to populate unique_groupings, we determine whether the grouping is real-valued. So we
-    # could instead populate two sets, saving isreal and a lot of conditionals in the second loop.
-    unique_groupings = sizehint!(Set{FastKey{I}}(), iszero(Nc) ? trisize(length(grouping)) : length(grouping)^2)
+    unique_groupings = Set{FastKey{I}}()
     real_grouping = true
     totalsize = 0
-    for (i, g₁) in enumerate(grouping)
-        if !iszero(Nc)
-            g₁real = !iszero(Nr) && isreal(g₁)
-            # Consider the g₂ = ḡ₁ case separately in the complex case. Explanations below.
-            let g₂=g₁
-                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
-                indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
-                if indexug ≤ 0
-                    @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
-                    totalsize += 1
-                end
-            end
-        end
-        # In the real case, we can skip the entries behind i as they would lead to duplicates.
-        # In the complex case, we can also skip them, as they would lead to exact conjugates, which in the end give rise to the
-        # same conditions (but note that i is already handled above).
-        for g₂ in Iterators.take(grouping, iszero(Nc) ? i : i -1)
-            # We don't use mindex, as this can have unintended side-effects on the solver state (such as creating a
-            # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
-            # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
-            # will probably appear at some place).
-            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
-            # We need to add the product to the set if it does not exists; we also need to count the number of conditions that
-            # we get out of it.
-            indexug, sh = Base.ht_keyindex2_shorthash!(unique_groupings.dict, prodidx)
-            if indexug ≤ 0
-                # It does not exist.
-                @inbounds Base._setindex!(unique_groupings.dict, nothing, prodidx, -indexug, sh)
-                # Assume we have a grouping g = (gᵣ + im*gᵢ) and a polynomial p = pᵣ + im*pᵢ, where the individual parts are
-                # real-valued. Then, add_equality! means that g*p = 0 and ḡ*p = 0. Of course we can also conjugate everything.
-                # We must split each constraint into its real and imaginary parts:
-                # (I)   Re(g*p) = gᵣ*pᵣ - gᵢ*pᵢ
-                # (II)  Im(g*p) = gᵣ*pᵢ + gᵢ*pᵣ
-                # (III) Re(ḡ*p) = gᵣ*pᵣ + gᵢ*pᵢ
-                # (IV)  Im(ḡ*p) = gᵣ*pᵢ - gᵢ*pᵣ
-                # To analyze this (which would be easier if we added and subtracted the equalities, but in the
-                # IntPolynomials setup, the given form is most easy to handle), let's consider linear dependencies.
-                # - If the constraint is real-valued, (III) is equal to (I) and (IV) is -(II), so we only take (I) and (II).
-                # - If the grouping is real-valued, (III) is equal to (I) and (IV) is equal to (II); we only take (I) and (II).
-                # - If both are real-valued, (III) is equal to (I) while (II) and (IV) are zero, so we only take (I).
-                # - If both are complex-valued, all constraints are linearly independent.
-                # Rearranging this, we always take (I); if at least one is complex-valued, we also take (II); if both are, we
-                # take all. Note that we don't have to consider the conjugates of the groupings separately, as they only yield
-                # a global sign in the zero-equality.
-                # For this loop, this means that we will only check whether g₁*ḡ₂ belongs to a real-valued monomial, in which
-                # case we add 1; or to a complex-valued monomial, in which case we add 2. After the loop, we multiply by 2 if
-                # the constraint was also complex-valued.
-                if iszero(Nc) || (!iszero(Nr) && g₁real && isreal(g₂)) # note that g₁ ≠ ḡ₂
-                    totalsize += 1
-                else
-                    totalsize += 2
-                    real_grouping = false
-                end
-            end
-        end
+    for groupingᵢ in groupings
+        _, real_groupingᵢ, totalsizeᵢ = unique_outer_groupings(groupingᵢ, unique_groupings)
+        real_grouping &= real_groupingᵢ
+        totalsize += totalsizeᵢ
     end
 
     real_constr = isreal(constraint)
@@ -1950,10 +1892,7 @@ function _fix_setup!(state::AnySolver{T,V}, problem::Problem{P}, groupings::Rela
 
     infoᵢ = 2
     for (groupingsᵢ, constrᵢ) in zip(groupings.zeros, problem.constr_zero)
-        info[infoᵢ] = this_info = Vector{Tuple{Symbol,Any}}(undef, length(groupingsᵢ))
-        for (j, grouping) in enumerate(groupingsᵢ)
-            this_info[j] = (:fix, moment_add_equality!(state, grouping, constrᵢ, counters))
-        end
+        info[infoᵢ] = Tuple{Symbol,Any}[(:fix, moment_add_equality!(state, groupingsᵢ, constrᵢ, counters))]
         infoᵢ += 1
     end
 
