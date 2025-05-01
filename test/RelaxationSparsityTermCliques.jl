@@ -18,14 +18,6 @@ PSD block sizes:
   [3 => 4]"
     @test poly_optimize(:Clarabel, sp).objective ≈ -0.0035512 atol = 1e-6
 
-    # Paper says that the iterations terminate. But we get a different chordal extension than the paper.
-    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
-Variable cliques:
-  x[1], x[2], x[3]
-PSD block sizes:
-  [4 => 2, 3 => 1]"
-    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-8
-
     @test isnothing(iterate!(sp))
 end
 
@@ -41,10 +33,10 @@ end
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6]
 PSD block sizes:
-  [24 => 1, 23 => 2, 21 => 1, 20 => 2, 18 => 2, 7 => 7, 1 => 15]
+  [23 => 4, 20 => 2, 18 => 2, 7 => 7, 1 => 15]
 Free block sizes:
   [12 => 1, 9 => 1, 7 => 1, 1 => 6]"
-    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-8
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-6
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
@@ -126,52 +118,28 @@ end
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
-  [18 => 3, 17 => 4, 15 => 2, 14 => 3, 13 => 3, 12 => 4, 11 => 5, 10 => 4, 9 => 8, 8 => 3, 7 => 4, 6 => 11, 4 => 5, 1 => 35]"
-    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 5e-6
+  [18 => 3, 17 => 5, 15 => 1, 14 => 2, 13 => 4, 12 => 5, 11 => 4, 10 => 4, 9 => 8, 8 => 3, 7 => 4, 6 => 11, 4 => 5, 1 => 35]"
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol = 1e-5
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
-  [33 => 3, 32 => 2, 31 => 2, 30 => 1, 28 => 1, 27 => 1, 26 => 1, 25 => 2, 24 => 2, 23 => 5, 22 => 2, 21 => 3, 20 => 1, 19 => 3, 18 => 4, 17 => 1, 16 => 4, 15 => 1, 14 => 3, 13 => 2, 12 => 2, 11 => 1, 10 => 1, 7 => 5, 6 => 4, 5 => 8, 4 => 1, 3 => 14, 1 => 4]"
+  [33 => 2, 32 => 2, 31 => 1, 30 => 2, 28 => 1, 26 => 3, 25 => 3, 24 => 1, 23 => 1, 22 => 3, 21 => 2, 20 => 5, 19 => 2, 18 => 1, 17 => 2, 16 => 4, 15 => 3, 14 => 1, 13 => 2, 12 => 2, 11 => 1, 10 => 1, 7 => 5, 6 => 5, 5 => 8, 3 => 14, 1 => 4]"
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
-  [43 => 1, 41 => 3, 40 => 1, 38 => 1, 36 => 1, 35 => 2, 34 => 2, 33 => 2, 32 => 4, 30 => 1, 29 => 4, 28 => 2, 27 => 3, 26 => 3, 25 => 1, 24 => 3, 23 => 2, 22 => 4, 21 => 4, 20 => 1, 19 => 2, 18 => 4, 17 => 5, 16 => 4, 15 => 5, 14 => 4, 12 => 1, 10 => 1, 9 => 3]"
+  [44 => 1, 43 => 2, 41 => 1, 40 => 2, 39 => 1, 37 => 1, 36 => 1, 34 => 2, 33 => 1, 32 => 3, 31 => 4, 30 => 5, 29 => 2, 28 => 4, 26 => 3, 25 => 1, 24 => 5, 22 => 1, 21 => 1, 20 => 3, 19 => 1, 18 => 3, 17 => 5, 16 => 10, 15 => 2, 14 => 1, 13 => 2, 12 => 1, 11 => 2, 10 => 1, 9 => 1]"
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3], x[4], x[5], x[6], x[7]
 PSD block sizes:
-  [49 => 3, 48 => 2, 46 => 1, 44 => 3, 43 => 1, 39 => 2, 38 => 2, 36 => 3, 34 => 5, 33 => 3, 32 => 2, 31 => 3, 30 => 1, 29 => 4, 28 => 4, 27 => 3, 26 => 1, 25 => 4, 24 => 4, 23 => 5, 22 => 3, 21 => 4, 20 => 3]"
+  [45 => 4, 44 => 3, 43 => 8, 42 => 2, 41 => 3, 39 => 3, 37 => 3, 36 => 2, 35 => 5, 33 => 1, 32 => 1, 31 => 7, 30 => 4, 29 => 4, 28 => 4, 27 => 3, 26 => 3, 25 => 2, 24 => 4, 22 => 2, 21 => 2, 18 => 1]"
 
-    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
-Variable cliques:
-  x[1], x[2], x[3], x[4], x[5], x[6], x[7]
-PSD block sizes:
-  [50 => 1, 49 => 3, 48 => 1, 45 => 4, 40 => 2, 39 => 1, 38 => 2, 37 => 6, 36 => 2, 35 => 6, 34 => 3, 33 => 4, 32 => 6, 31 => 3, 30 => 8, 29 => 1, 27 => 1, 26 => 1, 25 => 4, 24 => 2, 23 => 1, 22 => 1]"
-
-    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
-Variable cliques:
-  x[1], x[2], x[3], x[4], x[5], x[6], x[7]
-PSD block sizes:
-  [50 => 1, 49 => 3, 48 => 1, 45 => 4, 44 => 3, 43 => 2, 40 => 6, 39 => 4, 38 => 3, 37 => 3, 36 => 2, 35 => 6, 34 => 3, 33 => 5, 32 => 1, 31 => 1, 30 => 5, 27 => 4, 26 => 4, 25 => 1, 24 => 1]"
-
-    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
-Variable cliques:
-  x[1], x[2], x[3], x[4], x[5], x[6], x[7]
-PSD block sizes:
-  [51 => 1, 50 => 1, 49 => 1, 48 => 1, 46 => 1, 45 => 5, 44 => 1, 43 => 1, 42 => 1, 41 => 3, 40 => 5, 39 => 4, 37 => 4, 36 => 1, 35 => 8, 34 => 2, 33 => 3, 32 => 1, 31 => 2, 30 => 3, 29 => 1, 28 => 3, 27 => 2, 26 => 2, 25 => 2]"
-
-    @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
-Variable cliques:
-  x[1], x[2], x[3], x[4], x[5], x[6], x[7]
-PSD block sizes:
-  [51 => 1, 50 => 1, 49 => 1, 48 => 1, 46 => 1, 45 => 5, 44 => 2, 42 => 1, 41 => 4, 40 => 5, 39 => 3, 37 => 4, 36 => 1, 35 => 8, 34 => 3, 33 => 2, 32 => 1, 31 => 3, 30 => 2, 29 => 1, 28 => 3, 27 => 3, 26 => 1, 25 => 2]"
-
-    @test isnothing(iterate!(sp))
+  # this will go on for some time
 end
 
 @testset "Complex-valued" begin

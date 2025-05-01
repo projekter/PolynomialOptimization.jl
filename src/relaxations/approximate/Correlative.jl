@@ -5,7 +5,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     @doc """
         SparsityCorrelative(relaxation::AbstractRelaxation; [high_order_zero,]
             [high_order_nonneg,] [high_order_psd,] [low_order_zero,] [low_order_nonneg,]
-            [low_order_psd,] chordal_completion=true, verbose::Bool=false)
+            [low_order_psd,] chordal_completion=CliqueTrees.MF(), verbose::Bool=false)
 
     Analyze the correlative sparsity of a problem.
     Correlative sparsity is a variable-based sparsity analysis. It was first defined by
@@ -24,14 +24,16 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
 
     By default, the correlative sparsity graph is completed to a chordal graph before the cliques are determined, which
     guarantees that the maximal cliques can be determined quickly; however, this may degrade the sparsity and it may be
-    favorable not to carry out the completion.
+    favorable not to carry out the completion. The argument `chordal_completion` may be set to `false` for this; any of the
+    allowed elimination algorithms from `CliqueTrees.jl` are other possible arguments. `true` (deprecated) defaults to `MF()`.
 
     If correlative and term sparsity are to be used together, use [`SparsityCorrelativeTerm`](@ref) instead of
     nesting the sparsity objects.
     """
     function SparsityCorrelative(relaxation::AbstractRelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
-        low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false) where # sync with SparsityCorrelativeTerm
+        low_order_psd=missing, chordal_completion::Union{Bool,<:CliqueTrees.EliminationAlgorithm}=CliqueTrees.MF(),
+        verbose::Bool=false) where # sync with SparsityCorrelativeTerm
         {Nr,Nc,I<:Integer,P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
@@ -116,7 +118,11 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             end
         end
         @verbose_info("Determining cliques")
-        gentime = @elapsed(cliques = sort!(chordal_completion ? chordal_cliques!(g) : Graphs.maximal_cliques(g), by=length))
+        if chordal_completion === true
+            chordal_completion = CliqueTrees.MF()
+        end
+        gentime = @elapsed(cliques = sort!(chordal_completion !== false ? chordal_cliques(g, alg=chordal_completion) :
+                                                                          Graphs.maximal_cliques(g), by=length))
         sort!.(cliques)
         if Nc > 1
             # The graph needs continuous indices; but the complex variables are not indexed contiuously. Normal and conjugated

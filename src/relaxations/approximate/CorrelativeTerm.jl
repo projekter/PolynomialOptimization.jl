@@ -24,10 +24,11 @@ See also [`SparsityCorrelative`](@ref), [`SparsityTermBlock`](@ref), [`SparsityT
 """
 SparsityCorrelativeTerm(relaxation::AbstractRelaxation; high_order_zero=missing,
     high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
-    low_order_psd=missing, chordal_completion::Bool=true, verbose::Bool=false,
-    method::Union{TermMode,<:AbstractVector{TermMode}}=TERM_MODE_BLOCK, termkwargs...) =
+    low_order_psd=missing, chordal_completion::Union{Bool,<:CliqueTrees.EliminationAlgorithm}=CliqueTrees.MF(),
+    verbose::Bool=false, method::Union{TermMode,<:AbstractVector{TermMode}}=TERM_MODE_BLOCK, termkwargs...) =
     SparsityCorrelativeTerm(SparsityCorrelative(relaxation; high_order_zero, high_order_nonneg, high_order_psd,
-        low_order_zero, low_order_nonneg, low_order_psd, chordal_completion, verbose); verbose, method, termkwargs...)
+        low_order_zero, low_order_nonneg, low_order_psd, chordal_completion, verbose); verbose, method,
+        chordal_completion=(chordal_completion isa Bool ? CliqueTrees.MF() : chordal_completion), termkwargs...)
 
 """
     SparsityCorrelativeTerm(relaxation::SparsityCorrelative; method=TERM_MODE_BLOCK, kwargs...)
