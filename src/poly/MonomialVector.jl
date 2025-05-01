@@ -389,7 +389,7 @@ function _conj(v::IntMonomialVectorComplete{Nr,Nc,I,<:ExponentsMultideg}, alongâ
 end
 _conj(v::IntMonomialVectorSubset{Nr,Nc,I}, along...) where {Nr,Nc,I<:Integer} =
     IntMonomialVector{Nr,Nc}(v.e, sort_along!(map(x -> conj(x).index, v), along...)[1])
-function _conj(v::IntMonomialVectorSubset{Nr,Nc,I,ExponentsMultideg}, along...) where {Nr,Nc,I<:Integer}
+function _conj(v::IntMonomialVectorSubset{Nr,Nc,I,<:ExponentsMultideg}, along...) where {Nr,Nc,I<:Integer}
     if @view(v.e.minmultideg[Nr+1:2:end]) == @view(v.e.minmultideg[Nr+2:2:end])
         minmultideg = v.e.minmultideg
     else
@@ -464,6 +464,7 @@ Base.in(x::IntMonomial{Nr,Nc}, v::IntMonomialVectorComplete{Nr,Nc}) where {Nr,Nc
 Base.in(x::IntMonomial{Nr,Nc}, v::IntMonomialVectorSubset{Nr,Nc}) where {Nr,Nc} =
     insorted(monomial_index(v.e, x), v.indices)
 Base.hasfastin(::Type{<:IntMonomialVector}) = true
+Base.insorted(x::IntMonomial{Nr,Nc}, v::IntMonomialVector{Nr,Nc}) where {Nr,Nc} = x âˆˆ v
 Base.searchsortedlast(v::IntMonomialVectorComplete{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc} =
     monomial_index(v.e, x)
 Base.searchsortedlast(v::IntMonomialVectorSubset{Nr,Nc}, x::IntMonomialOrConj{Nr,Nc}) where {Nr,Nc} =

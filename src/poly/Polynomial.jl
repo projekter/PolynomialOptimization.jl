@@ -254,6 +254,7 @@ function combine_polynomials(p₁::IntPolynomial{C1,Nr,Nc}, p₂::IntPolynomial{
         return IntPolynomial(newcoeffs, newindices)
     end
 end
+
 """
     change_backend(p::IntPolynomial, variables::AbstractVector{<:AbstractVariable})
 
