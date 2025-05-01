@@ -26,6 +26,12 @@ if !@isdefined(strRep)
             rethrow(e)
         end
     end
+    if !have_mosek
+        findmosek = isequal(:Mosek)
+        deleteat!(Newton.newton_methods, findfirst(findmosek, Newton.newton_methods))
+        deleteat!(FacialReduction.reduction_methods, findfirst(findmosek, FacialReduction.reduction_methods))
+        deleteat!(PolynomialOptimization.tightening_methods, findfirst(findmosek, PolynomialOptimization.tightening_methods))
+    end
 
     # LoRADS requires compiled binaries.
     const have_lorads = isfile(PolynomialOptimization.Solvers.LoRADS.solverlib)
