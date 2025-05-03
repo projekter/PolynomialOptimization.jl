@@ -136,7 +136,7 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
             end
         else
             @verbose_info("Converting monomial indices")
-            candidates = FastVec{UInt}(buffer=length(mons))
+            candidates = FastVec{UInt}(buffer=length(mons) + length(pmons))
             for mon in mons
                 @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates{Nr}(exponents(mon))))
             end
@@ -144,7 +144,7 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
                 @inbounds unsafe_push!(candidates, exponents_to_index(e, KillConjugates{Nr}(exponents(mon))))
             end
             @verbose_info("Sorting and removing duplicates")
-            return IntMonomialVector{Nr,Nc}(e, Base._groupedunique(sort!(finish!(candidates))))
+            return IntMonomialVector{Nr,Nc}(e, Base._groupedunique!(sort!(finish!(candidates))))
         end
     end
 

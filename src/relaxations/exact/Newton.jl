@@ -30,7 +30,7 @@ struct Newton{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
             # Not implemented at the moment.
             error("Mixing real- and complex-valued variables prevents Newton polytope methods")
         end
-        iszero(Nc) || newton_method === :complex || throw(ArgumentError("Complex-valued problems require the :complex method"))
+        iszero(Nc) || method === :complex || throw(ArgumentError("Complex-valued problems require the :complex method"))
         problem = poly_problem(relaxation)
         parent = groupings(relaxation)
         basis = PolynomialOptimization.Newton.halfpolytope(method, problem.objective; zero=problem.constr_zero,

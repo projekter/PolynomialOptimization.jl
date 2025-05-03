@@ -8,10 +8,6 @@ using ..Solver: trisize
 
 export halfpolytope, halfpolytope_from_file
 
-_effective_nvars(::IntPolynomial{<:Any,Nr,0}) where {Nr} = Nr
-_effective_nvars(::IntPolynomial{<:Any,0,Nc}) where {Nc} = Nc
-_effective_nvars(::IntPolynomial) = error("Mixing real- and complex-valued variables prevents Newton polytope methods")
-
 """
     halfpolytope(method, poly; verbose=false, preprocess_quick=true,
         preprocess_randomized=false, preprocess_fine=false, preprocess=nothing,
@@ -79,12 +75,13 @@ The `parameters` will be passed on to the linear solver in every case (preproces
 
 See also [`halfpolytope_from_file`](@ref).
 """
-function halfpolytope(method::Symbol, poly::IntPolynomial{<:Any,Nr,0,<:IntMonomialVector{Nr,0,I}}; kwargs...) where {Nr,I<:Integer}
-    mons = IntMonomialVector{Nr,0}(ExponentsDegree{Nr,I}(0, maxhalfdegree(poly)))
+function halfpolytope(method::Symbol, poly::IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}; kwargs...) where {Nr,Nc,I<:Integer}
+    iszero(Nr) || iszero(Nc) || error("Mixing real- and complex-valued variables prevents Newton polytope methods")
+    mons = IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, maxhalfdegree(poly)))
     noconstr = typeof(poly)[]
-    nogroup = Vector{IntMonomialVector{Nr,0,I}}[]
+    nogroup = Vector{IntMonomialVector{Nr,Nc,I}}[]
     return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=noconstr, nonneg=noconstr, psd=Matrix{typeof(poly)}[],
-        groupings=RelaxationGroupings(IntMonomialVector{Nr,0,I}[mons], nogroup, nogroup, nogroup,
+        groupings=RelaxationGroupings(IntMonomialVector{Nr,Nc,I}[mons], nogroup, nogroup, nogroup,
             Vector{variable_union_type(poly)}[]), kwargs...)
 end
 function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
@@ -125,9 +122,9 @@ function halfpolytope(V, objective::P, ::Val{false}; verbose::Bool=false, filepa
     end
 end
 
-function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false, zero::AbstractVector{P}=P[],
-    nonneg::AbstractVector{P}=P[], psd::AbstractVector{<:AbstractMatrix{P}}=Matrix{P}[], prefactor::P=one(P),
-    degree::Int=maxhalfdegree(objective)) where {Nc,P<:IntPolynomial{<:Any,0,Nc}}
+function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false, zero::AbstractVector{P},
+    nonneg::AbstractVector{P}, psd::AbstractVector{<:AbstractMatrix{P}}, prefactor::P=Base.zero(P),
+    groupings::RelaxationGroupings) where {Nc,P<:IntPolynomial{<:Any,0,Nc}}
     # For complex-valued polynomials, the SDP looks like dot(basis, M, basis); due to the conjugation of the first element,
     # this is a 1:1 mapping between elements in M and monomials - contrary to the non-unique real case. Given that the
     # polynomials must be real-valued, any monomial that is present in the objective will also be present with its conjugate.
@@ -136,7 +133,7 @@ function halfpolytope(::Val{:complex}, objective::P, ::Any; verbose::Bool=false,
     # nor has a distributed version.
     newton_time = @elapsed begin
         @verbose_info("Complex-valued Newton polytope: merging constraints")
-        result = merge_constraints(degree, objective, zero, nonneg, psd, prefactor, verbose)
+        result = merge_constraints(objective, zero, nonneg, psd, prefactor, groupings, verbose, false)
     end
     @verbose_info("Found ", length(result), " elements in the complex-valued \"Newton halfpolytope\" in ", newton_time,
         " seconds")
