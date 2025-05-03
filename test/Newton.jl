@@ -129,3 +129,10 @@ end
     @test output[11] == "Removing redundancies from the convex hull - fine, $pts initial candidates"
     @test startswith(output[12], "Found 57 extremal points of the convex hull in")
 end
+
+@testset "\"Newton\" polytope (complex-valued)" begin
+    DynamicPolynomials.@complex_polyvar z[1:2]
+
+    @test Newton.halfpolytope(:complex, z[1] + conj(z[1]) + conj(z[1])*z[2]^2 + z[1]*conj(z[2])^2) ==
+        monomial_vector([1, z[1], z[2]^2])
+end
