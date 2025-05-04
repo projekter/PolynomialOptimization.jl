@@ -394,7 +394,7 @@ function poly_decomposition(data, groupings::AbstractVector{<:IntMonomialVector{
     unique_groupings = Set{FastKey{I}}()
     real_grouping = true
     for groupingᵢ in groupings
-        _, real_groupingᵢ, _ = Solver.unique_outer_groupings(groupingᵢ, unique_groupings)
+        _, real_groupingᵢ, _ = Solver.unique_outer_groupings(groupingᵢ, result=unique_groupings)
         real_grouping &= real_groupingᵢ
     end
 

@@ -1765,8 +1765,10 @@ function moment_add_equality!(state::AnySolver{T}, groupings::AbstractVector{<:(
     unique_groupings = Set{FastKey{I}}()
     real_grouping = true
     totalsize = 0
+    e = first(groupings).e
     for groupingᵢ in groupings
-        _, real_groupingᵢ, totalsizeᵢ = unique_outer_groupings(groupingᵢ, unique_groupings)
+        groupingᵢ.e == e || error("Groupings with non-matching exponent sets")
+        _, real_groupingᵢ, totalsizeᵢ = unique_outer_groupings(groupingᵢ, result=unique_groupings)
         real_grouping &= real_groupingᵢ
         totalsize += totalsizeᵢ
     end

@@ -7,7 +7,7 @@ using ..FastVector: overallocation
 using ..PolynomialOptimization: @assert, @inbounds, @verbose_info, @capture, @unroll, FastKey, StackVec, Problem, trisize,
     sort_along!, sizehint_!
 import ..PolynomialOptimization: MomentVector
-using ..IntPolynomials.MultivariateExponents: ExponentsAll, ExponentsDegree, Unsafe, unsafe
+using ..IntPolynomials.MultivariateExponents: AbstractExponents, ExponentsAll, ExponentsDegree, Unsafe, unsafe, indextype
 using ..Relaxation: AbstractRelaxation, RelaxationGroupings
 import LinearAlgebra: issuccess, UpperOrUnitUpperTriangular, LowerOrUnitLowerTriangular
 # We re-export things that implementations of solvers (which is the only place where this module should be use'd) will most

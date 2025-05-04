@@ -243,7 +243,8 @@ Base.length(smc::SparseMatrixCOO) = length(smc.rowinds)
 end
 
 """
-    unique_outer_groupings(grouping::AbstractVector{<:IntMonomial}[, result::Set])
+    unique_outer_groupings(grouping::AbstractVector{<:IntMonomial}[; result::Set]
+        [, exponents::AbstractExponents])
 
 Computes a set of all unique groupings that are produced via `groupings * groupings'`. For purely complex-valued groupings,
 this is the full list; as soon as we have a real variable present, it is smaller.
@@ -251,8 +252,15 @@ Returns a set of `FastKey`-wrapped monomial indices, a boolean indicating whethe
 the number of (real-valued) equalities that arise from this grouping (which should be multiplied by 2 if the groupings are to
 be multiplied by a complex-valued constraint).
 If present, the data will be appended to the `result` parameter.
+If present, the output index will be in the exponent set `e`.
 """
-function unique_outer_groupings(grouping::AbstractVector{M}, result::Set{FastKey{I}}=Set{FastKey{I}}()) where {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc,I}}
+function unique_outer_groupings(grouping::AbstractVector{M}; e::Union{Nothing,AbstractExponents}=nothing,
+    result::Set{FastKey{I}}=Set{FastKey{isnothing(e) ? IntPolynomials._get_I(M) : indextype(e)}}()) where
+    {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc}}
+    isempty(grouping) && return result
+    if isnothing(e)
+        e = @inbounds grouping[begin].e
+    end
     # To avoid rehashings, get an overestimator of the total grouping size first.
     # TODO (maybe): In the first loop to populate unique_groupings, we determine whether the grouping is real-valued. So we
     # could instead populate two sets, saving isreal and a lot of conditionals in the second loop.
@@ -264,7 +272,7 @@ function unique_outer_groupings(grouping::AbstractVector{M}, result::Set{FastKey
             g₁real = !iszero(Nr) && isreal(g₁)
             # Consider the g₂ = ḡ₁ case separately in the complex case. Explanations below.
             let g₂=g₁
-                prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
+                prodidx = FastKey(monomial_index(e, g₁, IntConjMonomial(g₂)))
                 indexug, sh = Base.ht_keyindex2_shorthash!(result.dict, prodidx)
                 if indexug ≤ 0
                     @inbounds Base._setindex!(result.dict, nothing, prodidx, -indexug, sh)
@@ -280,7 +288,7 @@ function unique_outer_groupings(grouping::AbstractVector{M}, result::Set{FastKey
             # representation for this monomial, although we don't even know whether we need it - if constraint does not contain
             # a constant term, this function must not automatically add all the squared groupings as monomials, even if they
             # will probably appear at some place).
-            prodidx = FastKey(monomial_index(g₁, IntConjMonomial(g₂)))
+            prodidx = FastKey(monomial_index(e, g₁, IntConjMonomial(g₂)))
             # We need to add the product to the set if it does not exists; we also need to count the number of conditions that
             # we get out of it.
             indexug, sh = Base.ht_keyindex2_shorthash!(result.dict, prodidx)
