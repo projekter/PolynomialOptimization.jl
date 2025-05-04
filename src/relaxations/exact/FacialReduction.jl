@@ -22,38 +22,11 @@ struct FacialReduction{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationS
     """
     function FacialReduction(relaxation::AbstractRelaxation{P};
         method::Symbol=PolynomialOptimization.FacialReduction.default_reduction_method(), verbose::Bool=false, parameters...) where
-        {Nr,Nc,I<:Integer,Poly<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}},P<:Problem{Poly}}
-        problem = poly_problem(relaxation)
-        parent = groupings(relaxation)
-        @verbose_info("Construction initial basis candidates")
-        M = FastVec{IntMonomialVector{Nr,Nc,I}}(buffer=1 + sum(length, parent.nonnegs, init=0))
-        if isone(length(parent.obj))
-            @inbounds unsafe_push!(M, parent.obj[1])
-        else
-            unsafe_push!(M, merge_monomial_vectors(parent.obj))
-        end
-        for groupings in parent.nonnegs, grouping in groupings
-            unsafe_push!(M, grouping)
-        end
+        {P<:Problem}
         @verbose_info("Performing facial reduction")
-        gentime = @elapsed(bases = PolynomialOptimization.FacialReduction.facial_reduction!!(method, M,
-            PolynomialOptimization.FacialReduction.ReductionGset(relaxation); verbose, parameters...))
+        gentime = @elapsed(gr = PolynomialOptimization.FacialReduction.facial_reduction(method, relaxation; verbose,
+            parameters...))
         @verbose_info("Facial reduction done in ", gentime, " seconds")
-        nonnegs = FastVec{Vector{IntMonomialVector{Nr,Nc,I}}}(buffer=length(problem.constr_nonneg))
-        i = 2
-        for oldgrouping in parent.nonnegs
-            unsafe_push!(nonnegs, bases[i:i+length(oldgrouping)-1])
-            i += length(oldgrouping)
-        end
-        @verbose_info("Embedding new groupings in old")
-        gentime = @elapsed(gr = embed(RelaxationGroupings(
-            IntMonomialVector{Nr,Nc,I}[bases[1]],
-            parent.zeros,
-            finish!(nonnegs),
-            parent.psds,
-            parent.var_cliques
-        ), parent, false))
-        @verbose_info("Obtained embedding in ", gentime, " seconds")
 
         new{P,typeof(gr)}(relaxation, gr)
     end

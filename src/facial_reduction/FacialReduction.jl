@@ -1,159 +1,222 @@
 module FacialReduction
 
-using MultivariatePolynomials, ..IntPolynomials, ..IntPolynomials.MultivariateExponents
-using ..PolynomialOptimization: @assert, @verbose_info, FastKey, Problem, poly_problem
+using MultivariatePolynomials, ..FastVector, ..IntPolynomials, ..IntPolynomials.MultivariateExponents
+using ..PolynomialOptimization: @assert, @capture, @inbounds, @verbose_info, FastKey, Problem, poly_problem
 using ..Relaxation
 using ..Solver: unique_outer_groupings
 
-export facial_reduction!!
+export facial_reduction
 
-function M⁺(m::IntMonomialVector{Nr,Nc}) where {Nr,Nc}
+include("./Constraints.jl")
+
+intsum(x...) = sum(x..., init=0)::Int
+
+function M⁺(M::IntMonomialVector{Nr,0}) where {Nr}
     # M \ {(α + β)/2 : α, β ∈ M, α ≠ β}
     # We typically expect M⁺ to be rather small compared to m.
-    indices = trues(length(m))
-    α = Vector{Int}(undef, nvariables(eltype(m)))
+    keeps = trues(length(M))
+    α = Vector{Int}(undef, Nr)
     β = similar(α)
     γ = similar(α)
-    @inbounds for (i, α) in enumerate(IntPolynomials.veciter(m, α))
-        for β in Iterators.take(IntPolynomials.veciter(m, β), i -1)
-            valid = true
+    @inbounds for (i, α) in enumerate(IntPolynomials.veciter(M, α))
+        for β in Iterators.take(IntPolynomials.veciter(M, β), i -1)
+            evendeg = true
             deg = 0
             for k in eachindex(α)
                 γₖ = α[k] + β[k]
                 if iszero(γₖ & true)
                     deg += (γ[k] = γₖ >> 1)
                 else
-                    valid = false
+                    evendeg = false
                     break
                 end
             end
-            valid || continue
-            delEidx = IntPolynomials.MultivariateExponents.exponents_to_index(m.e, γ, deg)
+            evendeg || continue
+            delEidx = IntPolynomials.MultivariateExponents.exponents_to_index(M.e, γ, deg)
             iszero(delEidx) && continue
-            delidx = searchsortedlast(m, IntMonomial{Nr,Nc}(IntPolynomials.unsafe, m.e, delEidx, deg))
-            if delidx > 0 && m[delidx].index == delEidx
-                indices[delidx] = false
+            delidx = searchsortedlast(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, delEidx, deg))
+            if delidx > 0 && M[delidx].index == delEidx
+                keeps[delidx] = false
             end
         end
     end
-    @inbounds return m[indices]
+    @inbounds return M[keeps]
 end
 
-@inline function inΣhatofMperp(m::IntMonomial{Nr,Nc}, M::IntMonomialVector{Nr,Nc}, (mindegM, maxdegM)::Tuple{Int,Int},
-                               newExponents::Vector{Int}) where {Nr,Nc}
+function updateM⁺!(data::FacialReductionData; verbose::Bool=false)
+    @verbose_info("Updating M⁺")
+    upd_time = @elapsed(data.M⁺_obj .= M⁺.(data.M_obj))
+    @verbose_info("├ objective (", upd_time, " seconds)")
+
+    upd_time = @elapsed begin
+        for (groupings, M⁺s) in zip(data.M_nonneg, data.M⁺_nonneg)
+            M⁺s .= M⁺.(groupings)
+        end
+    end
+    isempty(data.M_nonneg) || @verbose_info("├ nonnegative constraints (", upd_time, " seconds)")
+
+    upd_time = @elapsed begin
+        for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
+            M⁺s .= M⁺.(groupings)
+        end
+    end
+    isempty(data.M_psd) || @verbose_info("├ PSD constraints (", conv_time, " seconds)")
+
+    @verbose_info("└ End updating M⁺")
+    return data
+end
+
+@inline function inΣhatofMperp(M::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}, (mindegM, maxdegM)::Tuple{Int,Int},
+                               newExponents::AbstractVector{Int}) where {Nr}
     # p ∈ ̂Σ(M)⟂ = Σ(M)⟂, which is simply the set of all polynomials in ℝ_{2d} with exponents not in M + M
-    # We need to figure out whether ∃m₁, m₂ ∈ M : exponents(m) = m₁ + m₂.
+    # We need to figure out whether ∃m₁, m₂ ∈ M : m = m₁ + m₂.
     # Clearly, this implies that degree(m₁) + mindegree(M) ≤ degree(m) ≤ degree(m₁) + maxdegree(M)
     # Therefore, we can restrict our search for m₁ to degree(m) - maxdegree(M) ≤ degree(m₁) ≤ degree(m) + mindegree(M)
     # and, more loosely, 2mindegree(M) ≤ degree(m) ≤ 2maxdegree(M)
-    @assert(length(newExponents) == Nr + 2Nc)
+    @assert(length(newExponents) ≥ Nr)
     d = degree(m)
     drange = degree_range(M.e, d-maxdegM:d+mindegM)
     # It would be good to specify degree here; but we don't know whether the exponent set actually contains monomials of the
     # boundary degrees.
-    subvector = @view(M[range(searchsortedfirst(M, IntMonomial{Nr,Nc}(IntPolynomials.unsafe, M.e, first(drange))),
-                              searchsortedlast(M, IntMonomial{Nr,Nc}(IntPolynomials.unsafe, M.e, last(drange))))])
+    subvector = @view(M[range(searchsortedfirst(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, first(drange))),
+                              searchsortedlast(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, last(drange))))])
     @inbounds for m₁ in subvector
-        failed = false
+        maybe_present = true
         degm₁ = degree(m₁)
         remdeg = d - degm₁
         for (j, (m₁ⱼ, mⱼ)) in enumerate(zip(exponents(m₁), exponents(m)))
             if (newExponents[j] = mⱼ - m₁ⱼ) < 0 || (remdeg -= newExponents[j]) < 0
-                failed = true
+                maybe_present = false
                 break
             end
         end
-        failed && continue
+        maybe_present || continue
         iszero(remdeg) || continue
         degm₂ = d - degm₁
         m₂idx = exponents_to_index(M.e, newExponents, degm₂)
         iszero(m₂idx) && continue
-        insorted(IntMonomial{Nr,Nc}(IntPolynomials.unsafe, M.e, m₂idx, degm₂), subvector) && return false
+        insorted(IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, m₂idx, degm₂), subvector) && return false
     end
     return true
 end
 
-@inline function λindex(m::IntMonomial{Nr,Nc}, M⁺::IntMonomialVector{Nr,Nc}, newExponents::Vector{Int}) where {Nr,Nc}
+@inline function λindex(M⁺::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}, newExponents::AbstractVector{Int}) where {Nr}
+    @assert(length(newExponents) ≥ Nr)
     for (i, mᵢ) in enumerate(exponents(m))
-        iszero(mᵢ & true) || return
+        iszero(mᵢ & true) || return 0
         newExponents[i] = mᵢ >> 1
     end
     halfdeg = degree(m) >> 1
     M⁺Eidx = IntPolynomials.MultivariateExponents.exponents_to_index(M⁺.e, newExponents, halfdeg)
     iszero(M⁺Eidx) && return
-    M⁺idx = searchsortedlast(M⁺, IntMonomial{Nr,Nc}(IntPolynomials.unsafe, M⁺.e, M⁺Eidx, halfdeg))
-    M⁺idx > 0 && M⁺[M⁺idx].index == M⁺Eidx && return M⁺idx
-    return
+    M⁺idx = searchsortedlast(M⁺, IntMonomial{Nr,0}(IntPolynomials.unsafe, M⁺.e, M⁺Eidx, halfdeg))
+    @inbounds M⁺idx > 0 && M⁺[M⁺idx].index == M⁺Eidx && return M⁺idx
+    return 0
 end
 
-function λtoresult(λ::AbstractVector{<:Real}, M::AbstractVector{<:IntMonomialVector{Nr,Nc}},
-                   M⁺::AbstractVector{<:IntMonomialVector{Nr,Nc}}, unusedλ::AbstractVector{Bool}) where {Nr,Nc}
+function _truncate(M::IntMonomialVector{Nr,0}, M⁺::IntMonomialVector{Nr,0}, λ::AbstractVector{<:Real},
+                   usedλ::AbstractVector{Bool}) where {Nr}
     # The artificial constraint ∑λ = 1 is introduced just to exclude the case where everything is zero. But this means that we
     # could write any other positive constant on the r.h.s. Therefore, any λ that is never used anywhere in the problem may be
     # assigned an arbitrary strictly positive value, which allows to discard it - even if the solver assigned 0.
-    λlast = 0
+    keeps = trues(length(M))
     changed = false
-    result = similar(M)
-    @inbounds for (j, (Mⱼ, M⁺ⱼ)) in enumerate(zip(M, M⁺))
-        # TODO: write something analogous to keepat!!, using an iterator over deleted indices
-        r = λlast+1:λlast+length(M⁺ⱼ)
-        keeps = trues(length(Mⱼ))
-        for (i, (λᵢ, unusedλᵢ)) in enumerate(zip(@view(λ[r]), @view(unusedλ[r])))
-            if λᵢ > 1e-8 || unusedλᵢ
-                keeps[searchsortedfirst(Mⱼ, M⁺ⱼ[i])] = false
+    for (i, (λᵢ, usedλᵢ)) in enumerate(zip(λ, usedλ))
+        if λᵢ > 1e-8 || !usedλᵢ
+            keeps[searchsortedfirst(M, M⁺[i])] = false
+            changed = true
+        end
+    end
+    return changed ? M[keeps] : M
+end
+
+function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ::AbstractVector{Bool})
+    @assert(length(λ) == length(usedλ))
+    changed = false
+    r = 0:0
+    @inbounds for (i, (M, M⁺)) in enumerate(zip(data.M_obj, data.M⁺_obj))
+        r = last(r)+1:last(r)+length(M⁺)
+        newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
+        if newM !== M
+            data.M_obj[i] = newM
+            changed = true
+        end
+    end
+    @inbounds for (groupings, M⁺s) in zip(data.M_nonneg, data.M⁺_nonneg)
+        for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
+            r = last(r)+1:last(r)+length(M⁺)
+            newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
+            if newM !== M
+                groupings[i] = newM
                 changed = true
             end
         end
-        result[j] = IntPolynomials.keepat!!(Mⱼ, keeps)
-        λlast += length(M⁺ⱼ)
     end
-    return changed ? result : nothing
+    @inbounds for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
+        for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
+            r = last(r)+1:last(r)+length(M⁺)
+            newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
+            if newM !== M
+                groupings[i] = newM
+                changed = true
+            end
+        end
+    end
+    @assert(last(r) == length(λ))
+    return changed
 end
 
-@doc raw"""
-    facial_reduction(method, M, g; verbose=false, parameters...)
+function facial_reduction! end
 
-Performs facial reduction on a sums-of-squares problem. If just a single SOS condition is present, `M` may be an
-`IntMonomialVector` and `g` a vector of `IntPolynomials`; for multiple conditions, `M` should be a vector of
-`IntMonomialVector`s and `g` a matrix of `IntPolynomials` (with one column for each condition).
-The vector(s) `M` contain initial candidates for the grouping while the polynomials `g` are fixed by the problem.
-
-The form of the problem is
-```math
-\min_{\vec u \in \mathbb R^m} \vec \langle\vec w, \vec u\rangle \\
-\text{such that} \\
-g_{1, j}(\vec x) + \sum_{k = 2}^{m +1} u_k g_{k, j}(\vec x) \in \text{SOS}
-```
-and the algorithm follows [Permenter, Parillo (2014)](https://doi.org/10.1109/CDC.2014.7040427).
-"""
-function facial_reduction!!(method::Val, M::AbstractVector{<:IntMonomialVector{Nr,Nc,I}},
-    gs::AbstractMatrix{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}; verbose::Bool=false, kwargs...) where {Nr,Nc,I<:Integer}
-    length(M) == size(gs, 2) || throw(DimensionMismatch("Number of initial coordinate vectors and polynomials do not coincide"))
-    result = M
+function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, kwargs...)
     i = 0
-    if verbose
-        oldsize = sum(length, result, init=0)
-    end
+    @verbose_info("Starting facial reduction")
     while true
-        @verbose_info("Facial reduction, iteration ", i += 1)
-        frtime = @elapsed(new_result = facial_reduction!!(method, result, gs, M⁺.(result); verbose, kwargs...))
-        if isnothing(new_result)
-            @verbose_info("Found no further reduction in ", frtime, " seconds")
-            return result
+        if verbose
+            println("Iteration #", i += 1)
+            flush(stdout)
+        end
+        upd_time = @elapsed begin
+            updateMonomials!(data; verbose)
+            updateM⁺!(data; verbose)
+        end
+        @verbose_info("Iteration preprocessing done in ", upd_time, " seconds")
+        frtime = @elapsed(changed = facial_reduction!(method, data; verbose, kwargs...))
+        if !changed
+            @verbose_info("Iteration time: ", frtime, " seconds - finished")
+            return data
         else
-            @verbose_info("Reduced ", oldsize, " elements to ", (oldsize = sum(length, new_result, init=0)), " in ",
-                frtime, " seconds")
-            result = new_result
+            if verbose
+                println("Iteration time: ", frtime, " seconds")
+                show(stdout, "text/plain", data)
+                flush(stdout)
+            end
         end
     end
 end
 
-facial_reduction!!(method::Val, M::IntMonomialVector{Nr,Nc,I}, g::AbstractVector{<:IntPolynomial{<:Any,Nr,Nc,I}};
-    kwargs...) where {Nr,Nc,I<:Integer} = facial_reduction!(method, [M], [g;;]; kwargs...)
+@doc raw"""
+    facial_reduction!(method, relaxation::AbstractRelaxation; verbose=false, parameters...)
 
-facial_reduction!!(method::Symbol, args...; kwargs...) = facial_reduction!!(Val(method), args...; kwargs...)
-facial_reduction!!(M::AbstractVector, rest...; kwargs...) =
-    facial_reduction!!(Val(default_reduction_method()), M, args...; kwargs...)
+Performs facial reduction on a sums-of-squares problem.
+The algorithm follows [Permenter, Parillo (2014)](https://doi.org/10.1109/CDC.2014.7040427).
+"""
+facial_reduction(@nospecialize(method::Val), relaxation::AbstractRelaxation; verbose::Bool=false, kwargs...) =
+    # Relaxation.embed(
+    #     @invoke(facial_reduction!(method::Val, FacialReductionData(relaxation; verbose)::FacialReductionData;
+    #                               verbose, kwargs...)),
+    #     Relaxation.groupings(relaxation);
+    #     verbose
+    # )
+    Relaxation.embed(
+        _facial_reduction!(method, FacialReductionData(relaxation; verbose); verbose, kwargs...),
+        Relaxation.groupings(relaxation);
+        verbose
+    )
+
+facial_reduction(method::Symbol, args...; kwargs...) = facial_reduction(Val(method), args...; kwargs...)
+facial_reduction(relaxation::AbstractRelaxation; kwargs...) =
+    facial_reduction(default_reduction_method(), relaxation; kwargs...)
 
 const reduction_methods = Symbol[]
 
@@ -162,7 +225,5 @@ function default_reduction_method()
         error("No facial reduction method is available. Load a solver package that provides such a method (e.g., Mosek)")
     @inbounds return reduction_methods[begin]
 end
-
-include("./Constraints.jl")
 
 end
