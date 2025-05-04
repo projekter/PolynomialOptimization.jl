@@ -95,6 +95,13 @@ end
 Base.:(==)(x::V, y::V) where {V<:IntVariable} = x.index == y.index
 Base.isless(x::V, y::V) where {V<:IntVariable} = isless(x.index, y.index)
 
+Base.IteratorSize(::Type{<:IntVariable}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:IntVariable}) = Base.HasEltype()
+Base.eltype(::Type{V}) where {V<:IntVariable} = Tuple{V,Int}
+Base.length(::IntVariable) = 1
+Base.iterate(v::IntVariable) = (v, 1), missing
+Base.iterate(::IntVariable, ::Missing) = nothing
+
 #region Variables iterator
 struct IntVariables{Nr,Nc,V<:IntVariable{Nr,Nc}} <: AbstractVector{V}
     IntVariables{Nr,Nc}() where {Nr,Nc} = new{Nr,Nc,IntVariable{Nr,Nc,smallest_unsigned(Nr + 2Nc)}}()

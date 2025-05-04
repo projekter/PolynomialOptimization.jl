@@ -810,48 +810,49 @@ end
     end
 
     @testset "monomial multiplication" begin
-        m = IntMonomial{2,0}([1, 3])
+        m = IntMonomial{2,0}([1, 2])
+        v = IntRealVariable{2,0}(2)
         @testset "all" begin
             # with index conversion - mv has Int, m has UInt
             mv = IntMonomialVector{2,0}([2, 3, 5, 8, 13])
-            mmv = @inferred m * mv
+            mmv = @inferred mv * m * v
             @test mmv.e isa ExponentsAll{2,UInt}
             @test mmv.indices == UInt[0x11, 0x12, 0x18, 0x1f, 0x28]
         end
         @testset "degree, large enough" begin
             # with index conversion
             mv = IntMonomialVector{2,0}(ExponentsDegree{2,Int}(0, 8), [2, 3, 5, 8, 13])
-            mmv = @inferred m * mv
+            mmv = @inferred mv * v * m
             @test mmv.e isa ExponentsDegree{2,UInt} && mmv.e.mindeg == 0 && mmv.e.maxdeg == 8
             @test mmv.indices == UInt[0x11, 0x12, 0x18, 0x1f, 0x28]
 
             # no index conversion
             mv = IntMonomialVector{2,0}(ExponentsDegree{2,UInt}(0, 8), UInt[2, 3, 5, 8, 13])
-            mmv = @inferred m * mv
+            mmv = @inferred (m * mv) * v
             @test mmv.e === mv.e
             @test mmv.indices == UInt[0x11, 0x12, 0x18, 0x1f, 0x28]
         end
         @testset "degree, must enlarge" begin
             mv = IntMonomialVector{2,0}(ExponentsDegree{2,Int}(2, 3))
-            mmv = @inferred mv * m
+            mmv = @inferred mv * m * v
             @test mmv.e isa ExponentsDegree{2,UInt} && mmv.e.mindeg == 2 && mmv.e.maxdeg == 7
             @test mmv.indices == UInt[0x14, 0x15, 0x16, 0x1b, 0x1c, 0x1d, 0x1e]
         end
         @testset "multidegree" begin
             mv = IntMonomialVector{2,0}(ExponentsMultideg{2,Int}(1, 4, [0, 1], [2, 2]))
-            mmv = @inferred m * mv
+            mmv = @inferred mv * m * v
             @test mmv.e isa ExponentsMultideg{2,UInt} && mmv.e.mindeg == 5 && mmv.e.maxdeg == 8 &&
                 mmv.e.minmultideg == [1, 4] && mmv.e.maxmultideg == [3, 5]
             @test mmv isa IntPolynomials.IntMonomialVectorComplete
 
             mv = IntMonomialVector{2,0}(ExponentsMultideg{2,Int}(1, 4, [0, 1], [2, 2]), 3:5)
-            mmv = @inferred mv * m
+            mmv = @inferred mv * m * v
             @test mmv.e isa ExponentsMultideg{2,UInt} && mmv.e.mindeg == 5 && mmv.e.maxdeg == 8 &&
                 mmv.e.minmultideg == [1, 4] && mmv.e.maxmultideg == [3, 5]
             @test mmv.indices === UInt(3):UInt(5)
 
             mv = IntMonomialVector{2,0}(ExponentsMultideg{2,UInt}(1, 4, [0, 1], [2, 2]), UInt[2, 6])
-            mmv = @inferred mv * m
+            mmv = @inferred mv * m * v
             @test mmv.e isa ExponentsMultideg{2,UInt} && mmv.e.mindeg == 5 && mmv.e.maxdeg == 8 &&
                 mmv.e.minmultideg == [1, 4] && mmv.e.maxmultideg == [3, 5]
             @test mmv.indices === mv.indices
