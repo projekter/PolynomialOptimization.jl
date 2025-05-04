@@ -29,24 +29,21 @@ end
 function id_to_index(relaxation::AbstractRelaxation, (type, index, grouping)::Tuple{Symbol,Integer,Integer})
     groupings = Relaxation.groupings(relaxation)
     if type === :objective
-        dim = length(groupings.obj[grouping])
-        return 1
+        return 1, length(groupings.obj[grouping])
     end
     prob = poly_problem(relaxation)
     i = index +1
     if type === :zero
-        dim = length(groupings.zeros[index][grouping])
-        return i
+        checkbounds(groupings.zeros[index], grouping)
+        return i, -1 # we don't have a "dimension" for equality constraints
     end
     i += length(prob.constr_zero)
     if type === :nonneg
-        dim = length(groupings.nonnegs[index][grouping])
-        return i
+        return i, length(groupings.nonnegs[index][grouping])
     end
     i += length(prob.constr_nonneg)
     if type === :psd
-        dim = length(groupings.psds[index][grouping])
-        return i
+        return i, length(groupings.psds[index][grouping])
     end
 
     throw(MethodError(id_to_index, (relaxation, (type, index, grouping))))
@@ -63,8 +60,9 @@ Usually, a [`SOSCertificate`](@ref) is more desirable than the construction of i
 function sos_matrix end
 
 function sos_matrix(relaxation::AbstractRelaxation, state, constraint)
-    index = id_to_index(relaxation, constraint)
-    solvertype, position = extract_info(state)[index][grouping]
+    index, dim = id_to_index(relaxation, constraint)
+    solvertype, position = extract_info(state)[index][dim == -1 || !(constraint isa Tuple) ||
+                                                      length(constraint) < 3 ? 1 : constraint[3]]
     return sos_matrix(relaxation, state, dim, Val(solvertype), position, Solver.extract_sos_prepare(relaxation, state))
 end
 
@@ -290,7 +288,14 @@ function SOSCertificate(result::Result)
     end
 
     i = 1
-    @inbounds for groupings in (grouping.zeros, grouping.nonnegs), groupingᵢ in groupings
+    @inbounds for groupingᵢ in grouping.zeros
+        infoᵢ = info[i += 1]
+        @assert(isone(length(infoᵢ)))
+        solvertype, position = infoᵢ[1]
+        data[i] = Any[sos_matrix(relaxation, state, -1, Val(solvertype), position, rawdata)]
+    end
+
+    @inbounds for groupingᵢ in grouping.nonnegs
         infoᵢ = info[i += 1]
         data[i] = dataᵢ = Vector{Any}(undef, length(infoᵢ))
         for (j, (solvertype, position)) in enumerate(infoᵢ)
@@ -374,13 +379,13 @@ end
 
 @inline _trunc(x, ϵ) = abs(x) < ϵ ? zero(x) : x
 
-function poly_decomposition(data, grouping::IntMonomialVector{Nr,Nc,I},
+function poly_decomposition(data, groupings::AbstractVector{<:IntMonomialVector{Nr,Nc,I}},
     constraint::IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}, ϵ) where {Nr,Nc,I<:Integer}
     # this is a decomposition of the equality constraint prefactors, which are arbitrary polynomials, no longer SOS.
     unique_groupings = Set{FastKey{I}}()
     real_grouping = true
     for groupingᵢ in groupings
-        _, real_groupingᵢ, _ = unique_outer_groupings(groupingᵢ, unique_groupings)
+        _, real_groupingᵢ, _ = Solver.unique_outer_groupings(groupingᵢ, unique_groupings)
         real_grouping &= real_groupingᵢ
     end
 
@@ -442,20 +447,9 @@ function Base.show(io::IO, m::MIME"text/plain", cert::SOSCertificate, ϵ=1e-6)
         beginning = true
         print(io, "+ (")
         show(io, m, constr)
-        println(io, ") * (")
-        for (dataᵢ, groupingᵢ) in zip(cert.data[i], grouping)
-            print(io, "   ")
-            if !beginning
-                print(io, "+ ")
-            else
-                beginning = false
-            end
-            print(io, "(") # Not really necessary, but by indicating the grouping we give a reason why we don't sum up
-                           # everything.
-            show(io, m, poly_decomposition(dataᵢ, groupingᵢ, constr, ϵ))
-            println(io, ")")
-        end
-        println(io, ")")
+        print(io, ") * (\n   ")
+        show(io, m, poly_decomposition(cert.data[i][1], grouping, constr, ϵ))
+        println(io, "\n)")
         i += 1
     end
 
@@ -512,14 +506,13 @@ function Base.getindex(s::SOSCertificate, type::Symbol)
 end
 Base.@propagate_inbounds function Base.getindex(s::SOSCertificate, type::Symbol, index::Integer; ϵ=0)
     type === :objective && !iszero(index) && return getindex(s, type, 0, index)
-    idx = id_to_index(s.relaxation, (type, index, 1))
+    idx, _ = id_to_index(s.relaxation, (type, index, 1))
     groupings = Relaxation.groupings(s.relaxation)
     if type === :objective
         grouping = groupings.obj
     elseif type === :zero
-        grouping = groupings.zeros[index]
-        return [poly_decomposition(m, g, poly_problem(s.relaxation).constr_zero[index], ϵ)
-                for (m, g) in zip(s.data[idx], grouping)]
+        # all zero groupings are merged
+        return [poly_decomposition(s.data[idx][1], groupings.zeros[index], poly_problem(s.relaxation).constr_zero[index], ϵ)]
     elseif type === :nonneg
         grouping = groupings.nonnegs[index]
     elseif type === :psd
@@ -529,13 +522,13 @@ Base.@propagate_inbounds function Base.getindex(s::SOSCertificate, type::Symbol,
     return [sos_decomposition(m, g, ϵ) for (m, g) in zip(s.data[idx], grouping)]
 end
 Base.@propagate_inbounds function Base.getindex(s::SOSCertificate, type::Symbol, index::Integer, grouping::Integer; ϵ=0)
-    idx = id_to_index(s.relaxation, (type, index, grouping))
+    idx, _ = id_to_index(s.relaxation, (type, index, grouping))
     groupings = Relaxation.groupings(s.relaxation)
     if type === :objective
         groupingᵢ = groupings.obj
     elseif type === :zero
-        groupingᵢ = groupings.zeros[index]
-        return poly_decomposition(s.data[idx][grouping], groupingᵢ[grouping], poly_problem(s.relaxation).constr_zero[index], ϵ)
+        # all zero groupings are merged
+        return poly_decomposition(s.data[idx][1], groupings.zeros[index], poly_problem(s.relaxation).constr_zero[index], ϵ)
     elseif type === :nonneg
         groupingᵢ = groupings.nonnegs[index]
     elseif type === :psd

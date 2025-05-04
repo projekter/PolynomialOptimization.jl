@@ -95,7 +95,8 @@ end
 Rerepresent(r::Rerepresent, fix_structure::Bool) = Rerepresent(r.info, r.cert, r.fn, fix_structure)
 
 function (r::Rerepresent)((type, index, grouping), dim)
-    idx = PolynomialOptimization.id_to_index(r.cert.relaxation, (type, index, grouping))
+    idx, olddim = PolynomialOptimization.id_to_index(r.cert.relaxation, (type, index, grouping))
+    @assert(dim == olddim)
     oldtype = r.info[idx][grouping]
     if oldtype in INFO_PSD
         oldrep = RepresentationPSD
