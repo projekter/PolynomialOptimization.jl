@@ -3,7 +3,7 @@ module FacialReduction
 using MultivariatePolynomials, ..FastVector, ..IntPolynomials, ..IntPolynomials.MultivariateExponents
 using ..PolynomialOptimization: @assert, @capture, @inbounds, @verbose_info, FastKey, Problem, poly_problem
 using ..Relaxation
-using ..Solver: unique_outer_groupings
+using ..Solver: unique_outer_groupings, trisize
 
 export facial_reduction
 
@@ -11,14 +11,12 @@ include("./Constraints.jl")
 
 intsum(x...) = sum(x..., init=0)::Int
 
-function M⁺(M::IntMonomialVector{Nr,0}) where {Nr}
-    # M \ {(α + β)/2 : α, β ∈ M, α ≠ β}
-    # We typically expect M⁺ to be rather small compared to m.
-    keeps = trues(length(M))
+function M⁺(M::IntMonomialVector{Nr,0}, keeps::AbstractVector{Bool}, start::Integer, len::Integer) where {Nr}
+    start > length(M) && return keeps # might happen due to roundoff errors
     α = Vector{Int}(undef, Nr)
     β = similar(α)
     γ = similar(α)
-    @inbounds for (i, α) in enumerate(IntPolynomials.veciter(M, α))
+    @inbounds for (i, α) in zip(start:start+len-1, Iterators.drop(IntPolynomials.veciter(M, α), start -1))
         for β in Iterators.take(IntPolynomials.veciter(M, β), i -1)
             evendeg = true
             deg = 0
@@ -40,24 +38,59 @@ function M⁺(M::IntMonomialVector{Nr,0}) where {Nr}
             end
         end
     end
+    return keeps
+end
+
+function M⁺(M::IntMonomialVector{Nr,0}; verbose::Bool=false) where {Nr}
+    # M \ {(α + β)/2 : α, β ∈ M, α ≠ β}
+    nthreads = Threads.nthreads()
+    if (isone(nthreads) || length(M) < 128)
+        @verbose_info("Using single-threaded setup, checking $(trisize(length(M))) combinations")
+        @inbounds return M[M⁺(M, trues(length(M)), 1, length(M))]
+    end
+    # multithreading issues:
+    # - different batch sizes - we parallelize the outer loop, but the inner has increasing length
+    #   ↪ if a thread works from index start to start+δ-1, it covers δ*(2start + δ -3)/2 iterations
+    #   → this is batchsize if δ = 3/2 - start + sqrt(2batchsize + (3/2 - start)^2)
+    # - when we write to keeps, this must not be a bit array. At least UInt8 is necessary to avoid data races
+    keeps = fill(true, length(M))
+    totalsize = trisize(length(M) -1)
+    nthreads = min(nthreads, max(1, totalsize >> 7)) # we don't want to have too small batchsizes, make 128 the minimum
+    batchsize = div(totalsize, nthreads, RoundUp)
+    @verbose_info("Using multi-threaded setup, each thread checking about $batchsize combinations")
+    tasks = Vector{Task}(undef, nthreads)
+    start = 1
+    ccall(:jl_enter_threaded_region, Cvoid, ())
+    try
+        @inbounds for i in 1:nthreads
+            δ = ceil(Int, 1.5 - start + sqrt(2batchsize + (1.5 - start)^2))
+            tasks[i] = Threads.@spawn M⁺($M, $keeps, $start, $δ)
+            start += δ
+        end
+        for task in tasks
+            wait(task)
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
+    end
     @inbounds return M[keeps]
 end
 
 function updateM⁺!(data::FacialReductionData; verbose::Bool=false)
     @verbose_info("Updating M⁺")
-    upd_time = @elapsed(data.M⁺_obj .= M⁺.(data.M_obj))
+    upd_time = @elapsed(data.M⁺_obj .= M⁺.(data.M_obj; verbose))
     @verbose_info("├ objective (", upd_time, " seconds)")
 
     upd_time = @elapsed begin
         for (groupings, M⁺s) in zip(data.M_nonneg, data.M⁺_nonneg)
-            M⁺s .= M⁺.(groupings)
+            M⁺s .= M⁺.(groupings; verbose)
         end
     end
     isempty(data.M_nonneg) || @verbose_info("├ nonnegative constraints (", upd_time, " seconds)")
 
     upd_time = @elapsed begin
         for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
-            M⁺s .= M⁺.(groupings)
+            M⁺s .= M⁺.(groupings; verbose)
         end
     end
     isempty(data.M_psd) || @verbose_info("├ PSD constraints (", conv_time, " seconds)")
@@ -177,8 +210,8 @@ function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Boo
             flush(stdout)
         end
         upd_time = @elapsed begin
-            updateMonomials!(data; verbose)
             updateM⁺!(data; verbose)
+            updateMonomials!(data; verbose)
         end
         @verbose_info("Iteration preprocessing done in ", upd_time, " seconds")
         frtime = @elapsed(changed = facial_reduction!(method, data; verbose, kwargs...))
