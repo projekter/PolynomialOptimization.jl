@@ -287,6 +287,27 @@ function Base.iterate(mi::IntMonomialVectorIterator{Indexed,V,<:IntMonomialVecto
         return Indexed ? ((mi.mv.indices[begin], v), (v, 2, length(mi.mv) -1)) : (v, (v, 2, length(mi.mv) -1))
     end
 end
+function Base.iterate(it::Iterators.Drop{<:IntMonomialVectorIterator{Indexed,V,<:IntMonomialVector{<:Any,<:Any,I,E},Iterate}}) where {Indexed,V,I<:Integer,E,Iterate}
+    mi = it.xs
+    it.n ≥ length(mi.mv) && return nothing
+    if V <: AbstractVector{Int}
+        @inbounds v = copyto!(mi.v, exponents(mi.mv[begin+it.n]))
+    else
+        @assert(V === Nothing)
+        @inbounds v = collect(exponents(mi.mv[begin+it.n]))
+    end
+    @inbounds if E <: AbstractExponents
+        return Indexed ? ((I(it.n +1), v), (I(it.n +1), v)) : (v, v)
+    elseif E <: Tuple{AbstractExponents,AbstractUnitRange}
+        return Indexed ? ((mi.mv.indices[begin+it.n], v), (mi.mv.indices[begin+it.n], v, length(mi.mv) - it.n -1)) :
+                         (v, (v, length(mi.mv) - it.n -1))
+    elseif Iterate
+        return (Indexed ? (mi.mv.indices[begin+it.n], v) : v), (v, mi.mv.indices[begin+it.n], it.n +2, length(mi.mv) - it.n -1)
+    else
+        return Indexed ? ((mi.mv.indices[begin+it.n], v), (v, it.n +2, length(mi.mv) - it.n - 1)) :
+                         (v, (v, it.n +2, length(mi.mv) - it.n - 1))
+    end
+end
 Base.iterate(mi::IntMonomialVectorIterator{false}, state::AbstractVector{Int}) =
     @inbounds iterate!(unsafe, state, mi.mv.e) ? (state, state) : nothing
 Base.iterate(mi::IntMonomialVectorIterator{true}, (index, state)::Tuple{Integer,AbstractVector{Int}}) =

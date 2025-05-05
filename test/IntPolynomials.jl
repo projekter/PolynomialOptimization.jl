@@ -809,6 +809,63 @@ end
         end
     end
 
+    @testset "iteration (drop)" begin
+        mv = IntMonomialVector{2,0}([2, 3, 5, 8, 13])
+        e = mv.e
+        @testset "standard (indexed)" begin
+            vi = Iterators.drop(veciter(mv), 3)
+            it, state = iterate(vi)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 8))
+            it, state = iterate(vi, state)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 13))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (indexed)" begin
+            vi = Iterators.drop(veciter(mv, true), 3)
+            it, state = iterate(vi)
+            @test it == (8, exponents(IntMonomial{2,0}(unsafe, e, 8)))
+            it, state = iterate(vi, state)
+            @test it == (13, exponents(IntMonomial{2,0}(unsafe, e, 13)))
+            @test isnothing(iterate(vi, state))
+        end
+
+        mv = IntMonomialVector{2,0}([2, 3, 5, 8, 9])
+        @testset "standard (iterated)" begin
+            vi = Iterators.drop(veciter(mv), 3)
+            it, state = iterate(vi)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 8))
+            it, state = iterate(vi, state)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 9))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (iterated)" begin
+            vi = Iterators.drop(veciter(mv, true), 3)
+            it, state = iterate(vi)
+            @test it == (8, exponents(IntMonomial{2,0}(unsafe, e, 8)))
+            it, state = iterate(vi, state)
+            @test it == (9, exponents(IntMonomial{2,0}(unsafe, e, 9)))
+            @test isnothing(iterate(vi, state))
+        end
+
+        mv = IntMonomialVector{2,0}(2:6)
+        @testset "standard (unit range)" begin
+            vi = Iterators.drop(veciter(mv), 3)
+            it, state = iterate(vi)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 5))
+            it, state = iterate(vi, state)
+            @test it == exponents(IntMonomial{2,0}(unsafe, e, 6))
+            @test isnothing(iterate(vi, state))
+        end
+        @testset "enumerated (unit range)" begin
+            vi = Iterators.drop(veciter(mv, true), 3)
+            it, state = iterate(vi)
+            @test it == (5, exponents(IntMonomial{2,0}(unsafe, e, 5)))
+            it, state = iterate(vi, state)
+            @test it == (6, exponents(IntMonomial{2,0}(unsafe, e, 6)))
+            @test isnothing(iterate(vi, state))
+        end
+    end
+
     @testset "monomial multiplication" begin
         m = IntMonomial{2,0}([1, 2])
         v = IntRealVariable{2,0}(2)
