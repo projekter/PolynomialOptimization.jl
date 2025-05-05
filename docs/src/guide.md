@@ -177,7 +177,6 @@ Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
   [10 => 1]
-Relaxation degree: 2
 ```
 In this case, no basis reduction was possible. However, in other cases, this can work. For example, if you want to inspect the
 Newton polytope of the polynomials whose squares might make up a certain objective, you can call [`Newton.halfpolytope`](@ref)
