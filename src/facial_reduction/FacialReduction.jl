@@ -166,39 +166,46 @@ function _truncate(M::IntMonomialVector{Nr,0}, M⁺::IntMonomialVector{Nr,0}, λ
 end
 
 function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ::AbstractVector{Bool})
+    # We want to get reproducible behavior, so an interruption after an iteration was displayed should always yield the same
+    # result. Hence, we disable interrupts during truncation.
     @assert(length(λ) == length(usedλ))
     changed = false
-    r = 0:0
-    @inbounds for (i, (M, M⁺)) in enumerate(zip(data.M_obj, data.M⁺_obj))
-        r = last(r)+1:last(r)+length(M⁺)
-        newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
-        if newM !== M
-            data.M_obj[i] = newM
-            changed = true
-        end
-    end
-    @inbounds for (groupings, M⁺s) in zip(data.M_nonneg, data.M⁺_nonneg)
-        for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
+    Base.sigatomic_begin()
+    try
+        r = 0:0
+        @inbounds for (i, (M, M⁺)) in enumerate(zip(data.M_obj, data.M⁺_obj))
             r = last(r)+1:last(r)+length(M⁺)
             newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
             if newM !== M
-                groupings[i] = newM
+                data.M_obj[i] = newM
                 changed = true
             end
         end
-    end
-    @inbounds for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
-        for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
-            r = last(r)+1:last(r)+length(M⁺)
-            newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
-            if newM !== M
-                groupings[i] = newM
-                changed = true
+        @inbounds for (groupings, M⁺s) in zip(data.M_nonneg, data.M⁺_nonneg)
+            for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
+                r = last(r)+1:last(r)+length(M⁺)
+                newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
+                if newM !== M
+                    groupings[i] = newM
+                    changed = true
+                end
             end
-            # TODO: adjust M_noy
         end
+        @inbounds for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
+            for (i, (M, M⁺)) in enumerate(zip(groupings, M⁺s))
+                r = last(r)+1:last(r)+length(M⁺)
+                newM = @views _truncate(M, M⁺, λ[r], usedλ[r])
+                if newM !== M
+                    groupings[i] = newM
+                    changed = true
+                end
+                # TODO: adjust M_noy
+            end
+        end
+        @assert(last(r) == length(λ))
+    finally
+        Base.sigatomic_end()
     end
-    @assert(last(r) == length(λ))
     return changed
 end
 
@@ -207,27 +214,35 @@ function facial_reduction! end
 function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, kwargs...)
     i = 0
     @verbose_info("Starting facial reduction")
-    while true
-        if verbose
-            println("Iteration #", i += 1)
-            flush(stdout)
-        end
-        upd_time = @elapsed begin
-            updateM⁺!(data; verbose)
-            updateM²!(data; verbose)
-        end
-        @verbose_info("Iteration preprocessing done in ", upd_time, " seconds")
-        frtime = @elapsed(changed = facial_reduction!(method, data; verbose, kwargs...))
-        if !changed
-            @verbose_info("Iteration time: ", frtime, " seconds - finished")
-            return data
-        else
+    try
+        while true
             if verbose
-                println("Iteration time: ", frtime, " seconds")
-                show(stdout, "text/plain", data)
+                println("Iteration #", i += 1)
                 flush(stdout)
             end
+            upd_time = @elapsed begin
+                updateM⁺!(data; verbose)
+                updateM²!(data; verbose)
+            end
+            @verbose_info("Iteration preprocessing done in ", upd_time, " seconds")
+            frtime = @elapsed(changed = facial_reduction!(method, data; verbose, kwargs...))
+            if !changed
+                @verbose_info("Iteration time: ", frtime, " seconds - finished")
+                return data
+            else
+                if verbose
+                    println("Iteration time: ", frtime, " seconds")
+                    show(stdout, "text/plain", data)
+                    flush(stdout)
+                end
+            end
         end
+    catch e
+        if e isa InterruptException
+            @verbose_info("Interrupted facial reduction, returning data of last iteration")
+            return data
+        end
+        rethrow(e)
     end
 end
 
