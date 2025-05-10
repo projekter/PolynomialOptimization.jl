@@ -12,9 +12,9 @@
 #              σ₀, σⱼ ∈ Σ, Sₖ ∈ Σmat, pᵢ ∈ ℝ[x]
 # This is again re-cast as obj(x) + prefactor(x) * u₁ + ∑ᵢ ... - ∑ⱼ ... - ∑ₖ ... ∈ Σ
 # Now, the decision variables u must contain the coefficients of the pᵢ, σⱼ, Sₖ, so there are many:
-# w = [0, 1, 0, ...], g₀₀(x) = obj(x), g₀(x) = [prefactor(x), zeroᵢ(x) * monomials in pᵢ...,
-#                                               nonnegⱼ(x) * monomials in σⱼ...,
-#                                               psdₖ(x)ₘₙ * monomials in Sₖₘₙ for every entry...],
+# w = [1, 0, ...], g₀₀(x) = obj(x), g₀(x) = [prefactor(x), zeroᵢ(x) * monomials in pᵢ...,
+#                                            nonnegⱼ(x) * monomials in σⱼ...,
+#                                            psdₖ(x)ₘₙ * monomials in Sₖₘₙ for every entry...],
 # gⱼ(x) = [0, 0..., -monomials in σⱼ...]
 # For matrix constraints, we exploit Sₖ ∈ Σmat ⇔ yᵀ Sₖ y ∈ Σ, adding dim Sₖ variables. We then automatically know by the Newton
 # polytope (see also Miller, Wang, Guo (2025)) that we never need to choose a basis larger than degree 1 with respect to y.
