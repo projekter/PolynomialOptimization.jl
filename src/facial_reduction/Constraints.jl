@@ -68,7 +68,7 @@ function _change_var_numbers(mv::IntMonomialVector{Nr,0,I}, ::Val{newNr}) where 
             return IntMonomialVector{Nr,0}(unsafe, newE, collect(range(convert_index(newE, mv.e, first(mv.indices)),
                                                                        convert_index(newE, mv.e, last(mv.indices)))))
         else
-            return IntMonomialVector{Nr,0}(unsafe, newE, convert_index.(newE, mv.e, mv.indices))
+            return IntMonomialVector{Nr,0}(unsafe, newE, convert_index.((newE,), (mv.e,), mv.indices))
         end
     end
     result = FastVec{I}(buffer=length(mv))
