@@ -211,7 +211,7 @@ function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Boo
         end
         upd_time = @elapsed begin
             updateM⁺!(data; verbose)
-            updateMonomials!(data; verbose)
+            updateM²!(data; verbose)
         end
         @verbose_info("Iteration preprocessing done in ", upd_time, " seconds")
         frtime = @elapsed(changed = facial_reduction!(method, data; verbose, kwargs...))

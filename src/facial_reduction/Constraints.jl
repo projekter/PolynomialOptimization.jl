@@ -28,21 +28,21 @@ struct FacialReductionData{C<:Real,Nr,NrPlusNy,I<:Integer,
     objective::PScalar
     M_obj::Vector{IntMonomialVector{Nr,0,I}}
     M⁺_obj::Vector{IntMonomialVector{Nr,0,I}}
-    monomials_obj::Vector{GScalar} # one item less - first grouping is not squared!
+    M²_obj::Vector{GScalar} # one item less - first grouping is not squared!
     prefactor::PScalar
 
     constr_zero::Vector{PScalar}
-    monomials_zero::Vector{GScalar}
+    M²_zero::Vector{GScalar}
 
     constr_nonneg::Vector{PScalar}
     M_nonneg::Vector{Vector{IntMonomialVector{Nr,0,I}}}
     M⁺_nonneg::Vector{Vector{IntMonomialVector{Nr,0,I}}}
-    monomials_nonneg::Vector{Vector{GScalar}}
+    M²_nonneg::Vector{Vector{GScalar}}
 
     constr_psd::Vector{Matrix{PMatrix}}
     M_psd::Vector{Vector{IntMonomialVector{NrPlusNy,0,I}}}
     M⁺_psd::Vector{Vector{IntMonomialVector{NrPlusNy,0,I}}}
-    monomials_psd::Vector{Vector{GMatrix}}
+    M²_psd::Vector{Vector{GMatrix}}
 end
 
 function FacialReductionData(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{C,Nr,0,<:IntMonomialVector{Nr,0,I}}}};
@@ -102,19 +102,19 @@ function FacialReductionData{C,Nr,NrPlusNy,I}(relaxation::AbstractRelaxation{<:P
     conv_time = @elapsed begin
         M_obj = copy(g.obj) # no deep copy necessary, it mutated, the first level will be overwritten entirely
         M⁺_obj = similar(M_obj)
-        monomials_obj = Vector{GScalar}(undef, length(g.obj) -1)
+        M²_obj = Vector{GScalar}(undef, length(g.obj) -1)
     end
     @verbose_info("├ objective and prefactor (", conv_time, " seconds)")
 
     conv_time = @elapsed begin
         # these will never be updated, so generate them once
-        monomials_zero = Vector{GScalar}(undef, length(prob.constr_zero))
+        M²_zero = Vector{GScalar}(undef, length(prob.constr_zero))
         @inbounds for (i, groupings) in enumerate(g.zeros)
             unique_groupings = Set{FastKey{I}}()
             for groupingⱼ in groupings
                 unique_outer_groupings(groupingⱼ, result=unique_groupings, e=eScalar)
             end
-            monomials_zero[i] = IntMonomialVector{Nr,0}(IntPolynomials.unsafe, eScalar, sort!(convert.(I, unique_groupings)))
+            M²_zero[i] = IntMonomialVector{Nr,0}(IntPolynomials.unsafe, eScalar, sort!(convert.(I, unique_groupings)))
         end
     end
     isempty(prob.constr_zero) || @verbose_info("├ zero constraints (", conv_time, " seconds)")
@@ -122,11 +122,11 @@ function FacialReductionData{C,Nr,NrPlusNy,I}(relaxation::AbstractRelaxation{<:P
     conv_time = @elapsed begin
         M_nonneg = Vector{Vector{IntMonomialVector{Nr,0,I}}}(undef, length(prob.constr_nonneg))
         M⁺_nonneg = similar(M_nonneg)
-        monomials_nonneg = Vector{Vector{GScalar}}(undef, length(prob.constr_nonneg))
+        M²_nonneg = Vector{Vector{GScalar}}(undef, length(prob.constr_nonneg))
         @inbounds for (i, groupings) in enumerate(g.nonnegs)
             M_nonneg[i] = copy(groupings)
             M⁺_nonneg[i] = similar(groupings)
-            monomials_nonneg[i] = Vector{GScalar}(undef, length(groupings))
+            M²_nonneg[i] = Vector{GScalar}(undef, length(groupings))
         end
     end
     isempty(prob.constr_nonneg) || @verbose_info("├ nonnegative constraints (", conv_time, " seconds)")
@@ -141,14 +141,14 @@ function FacialReductionData{C,Nr,NrPlusNy,I}(relaxation::AbstractRelaxation{<:P
             end
         end
         M⁺_psd = similar(M_psd)
-        monomials_psd = Vector{Vector{GMatrix}}(undef, length(prob.constr_psd))
+        M²_psd = Vector{Vector{GMatrix}}(undef, length(prob.constr_psd))
         tmp = Vector{Int}(undef, NrPlusNy)
         @inbounds fill!(@view(tmp[Nr+1:NrPlusNy-1]), 0)
         @inbounds tmp[end] = 1
         @inbounds for (i, (groupings, constr)) in enumerate(zip(g.psds, prob.constr_psd))
             M_psd[i] = dataᵢ = Vector{IntMonomialVector{NrPlusNy,0,I}}(undef, length(groupings))
             M⁺_psd[i] = similar(dataᵢ)
-            monomials_psd[i] = Vector{GMatrix}(undef, length(groupings))
+            M²_psd[i] = Vector{GMatrix}(undef, length(groupings))
             dim = size(constr, 1)
             for (j, groupingⱼ) in enumerate(groupings)
                 # groupingⱼ is unique groupings, but with the old variable number. It must be combined with the new auxilliary
@@ -172,10 +172,10 @@ function FacialReductionData{C,Nr,NrPlusNy,I}(relaxation::AbstractRelaxation{<:P
 
     @verbose_info("└ Conversion finished")
     return FacialReductionData(
-        prob.objective, M_obj, M⁺_obj, monomials_obj, prob.prefactor,
-        prob.constr_zero, monomials_zero,
-        prob.constr_nonneg, M_nonneg, M⁺_nonneg, monomials_nonneg,
-        constr_psd, M_psd, M⁺_psd, monomials_psd
+        objective, M_obj, M⁺_obj, M²_obj, prefactor,
+        constr_zero, M²_zero,
+        constr_nonneg, M_nonneg, M⁺_nonneg, M²_nonneg,
+        constr_psd, M_psd, M⁺_psd
     )
 end
 
@@ -204,19 +204,19 @@ _sumlen(x) = intsum(length, x)
 function Base.getproperty(data::FacialReductionData, field::Symbol)
     field === :numM⁺ && return _sumlen(data.M⁺_obj) + intsum(_sumlen, data.M⁺_nonneg) + intsum(_sumlen, data.M⁺_psd)
     field === :numSOS && return 1 + _sumlen(data.constr_nonneg) + _sumlen(data.constr_psd)
-    field === :numMons && return (iszero(data.prefactor) ? 1 : 2) + _sumlen(data.monomials_obj) +
-        _sumlen(data.monomials_zero) + intsum(_sumlen, data.monomials_nonneg) + intsum(_sumlen, data.monomials_psd)
+    field === :numMons && return (iszero(data.prefactor) ? 1 : 2) + _sumlen(data.M²_obj) +
+        _sumlen(data.M²_zero) + intsum(_sumlen, data.M²_nonneg) + intsum(_sumlen, data.M²_psd)
     return getfield(data, field)
 end
 
-function updateMonomials!(data::FacialReductionData{<:Any,Nr,NrPlusNy,I}; verbose::Bool=false) where {Nr,NrPlusNy,I<:Integer}
+function updateM²!(data::FacialReductionData{<:Any,Nr,NrPlusNy,I}; verbose::Bool=false) where {Nr,NrPlusNy,I<:Integer}
     @verbose_info("Populating squared monomials")
     eScalar = ExponentsAll{Nr,I}()
     eMatrix = ExponentsAll{NrPlusNy,I}()
 
     conv_time = @elapsed begin
         @inbounds for (j, groupingⱼ) in enumerate(Iterators.drop(data.M_obj, 1))
-            data.monomials_obj[j] = IntMonomialVector{Nr,0}(
+            data.M²_obj[j] = IntMonomialVector{Nr,0}(
                 IntPolynomials.unsafe, eScalar, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=eScalar)[1]))
             )
         end
@@ -227,7 +227,7 @@ function updateMonomials!(data::FacialReductionData{<:Any,Nr,NrPlusNy,I}; verbos
     conv_time = @elapsed begin
         @inbounds for (i, groupings) in enumerate(data.M_nonneg)
             for (j, groupingⱼ) in enumerate(groupings)
-                data.monomials_nonneg[i][j] = IntMonomialVector{Nr,0}(
+                data.M²_nonneg[i][j] = IntMonomialVector{Nr,0}(
                     IntPolynomials.unsafe, eScalar, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=eScalar)[1]))
                 )
             end
@@ -238,7 +238,7 @@ function updateMonomials!(data::FacialReductionData{<:Any,Nr,NrPlusNy,I}; verbos
     conv_time = @elapsed begin
         @inbounds for (i, groupings) in enumerate(data.M_psd)
             for (j, groupingⱼ) in enumerate(groupings)
-                data.monomials_psd[i][j] = IntMonomialVector{NrPlusNy,0}(
+                data.M²_psd[i][j] = IntMonomialVector{NrPlusNy,0}(
                     IntPolynomials.unsafe, eNatrix, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=eMatrix)[1]))
                 )
             end
@@ -275,11 +275,11 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
     if pos === :obj
         @assert(isone(idxouter))
         if idxinner ≤ length(data.M_obj)
-            mons = @inbounds data.monomials_obj[idxinner-1]
+            mons = @inbounds data.M²_obj[idxinner-1]
             @inbounds return FacialReductionDataSliceRest{C,false}(data.M_obj[idxinner], data.M⁺_obj[idxinner], mons, k),
                              (:obj, 1, idxinner +1, k + length(mons))
         end
-        k += _sumlen(data.monomials_zero)
+        k += _sumlen(data.M²_zero)
         pos = :nonneg
         idxinner = 1
     end
@@ -287,7 +287,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
         while idxouter ≤ length(data.M_nonneg)
             grouping = @inbounds data.M_nonneg[idxouter]
             if idxinner ≤ length(grouping)
-                mons = @inbounds data.monomials_nonneg[idxouter][idxinner]
+                mons = @inbounds data.M²_nonneg[idxouter][idxinner]
                 @inbounds return FacialReductionDataSliceRest{C,false}(grouping[idxinner], data.M⁺_nonneg[idxouter][idxinner],
                                                                        mons, k),
                                  (:nonneg, idxouter, idxinner +1, k + length(mons))
@@ -304,7 +304,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
         while idxouter ≤ length(data.M_psd)
             grouping = @inbounds data.M_psd[idxouter]
             if idxinner ≤ length(grouping)
-                mons = @inbounds data.monomials_psd[idxouter][idxinner]
+                mons = @inbounds data.M²_psd[idxouter][idxinner]
                 @inbounds return FacialReductionDataSliceRest{C,true}(grouping[idxinner], data.M⁺_psd[idxouter][idxinner],
                                                                       mons, k, size(data.constr_psd[idxouter], 1)),
                                  (:psd, idxouter, idxinner +1, k + length(mons))
@@ -365,8 +365,8 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
             iszero(frs.data.prefactor) || return (k += 1, frs.data.prefactor), (:obj, idxouter, idxinner +1, 1, 1, 1, k)
             idxinner += 1
         end
-        while idxinner ≤ length(frs.data.monomials_obj)
-            mons = @inbounds frs.data.monomials_obj[idxinner]
+        while idxinner ≤ length(frs.data.M²_obj)
+            mons = @inbounds frs.data.M²_obj[idxinner]
             if idxmon ≤ length(mons)
                 return (k += 1, _cached_onepolynomial(frs, @inbounds(mons[idxmon]))),
                        (:obj, idxouter, idxinner, idxmon +1, 1, 1, k)
@@ -381,8 +381,8 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
     end
     if pos === :zero
         @assert(isone(idxinner))
-        while idxouter ≤ length(frs.data.monomials_zero)
-            mons = @inbounds frs.data.monomials_zero[idxouter]
+        while idxouter ≤ length(frs.data.M²_zero)
+            mons = @inbounds frs.data.M²_zero[idxouter]
             if idxmon ≤ length(mons)
                 constr = @inbounds frs.data.constr_zero[idxouter]
                 return (k += 1, IntPolynomial(constr.coeffs, constr.monomials * @inbounds(mons[idxmon]))),
@@ -397,8 +397,8 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
         @assert(isone(idxmon))
     end
     if pos === :nonneg
-        while idxouter ≤ length(frs.data.monomials_nonneg)
-            grouping = @inbounds frs.data.monomials_nonneg[idxouter]
+        while idxouter ≤ length(frs.data.M²_nonneg)
+            grouping = @inbounds frs.data.M²_nonneg[idxouter]
             while idxinner ≤ length(grouping)
                 mons = @inbounds grouping[idxinner]
                 if idxmon ≤ length(mons)
@@ -419,8 +419,8 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
         @assert(isone(idxinner) && isone(idxmon))
     end
     if pos === :psd
-        while idxouter ≤ length(frs.data.monomials_psd)
-            grouping = @inbounds frs.data.monomials_psd[idxouter]
+        while idxouter ≤ length(frs.data.M²_psd)
+            grouping = @inbounds frs.data.M²_psd[idxouter]
             while idxinner ≤ length(grouping)
                 mons = @inbounds grouping[idxinner]
                 while idxmon ≤ length(mons)
@@ -456,17 +456,17 @@ end
 struct FacialReductionDataSliceRest{C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector,IN<:Union{Int,Nothing}} <: AbstractFacialReductionDataSlice{M_,M⁺_}
     M::M_
     M⁺::M⁺_
-    monomials::Monomials
+    M²::Monomials
     k::Int
     dim::IN
     extdegM::Tuple{Int,Int}
 
-    FacialReductionDataSliceRest{C,false}(M::M_, M⁺::M⁺_, monomials::Monomials, k::Int) where
+    FacialReductionDataSliceRest{C,false}(M::M_, M⁺::M⁺_, M²::Monomials, k::Int) where
         {C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector} =
-        new{C,Matrix,M_,M⁺_,Monomials,Nothing}(M, M⁺, monomials, k, nothing, extdegree(M))
-    FacialReductionDataSliceRest{C,true}(M::M_, M⁺::M⁺_, monomials::Monomials, k::Int, dim::Int) where
+        new{C,Matrix,M_,M⁺_,Monomials,Nothing}(M, M⁺, M², k, nothing, extdegree(M))
+    FacialReductionDataSliceRest{C,true}(M::M_, M⁺::M⁺_, M²::Monomials, k::Int, dim::Int) where
         {C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector} =
-        new{C,Matrix,M_,M⁺_,Monomials,Int}(M, M⁺, monomials, k, extdegree(M), dim)
+        new{C,Matrix,M_,M⁺_,Monomials,Int}(M, M⁺, M², k, extdegree(M), dim)
 end
 
 Base.eltype(::Type{<:FacialReductionDataSliceRest{C,<:Any,<:IntMonomialVector,<:IntMonomialVector,Monomials}}) where
@@ -479,14 +479,14 @@ Base.length(frs::FacialReductionDataSliceRest) = length(frs.monomials)
     :(@inline; return IntPolynomial($([-inv(C(2))]), IntMonomialVector{Nr,0}(IntPolynomials.unsafe, m.e, m.index:m.index)))
 
 function Base.iterate(frs::FacialReductionDataSliceRest{<:Any,false}, i::Int=0)
-    i ≥ length(frs.monomials) && return nothing
-    return (frs.k + i, _cached_minusonepolynomial(frs, @inbounds(frs.monomials[i+=1]))), i
+    i ≥ length(frs.M²) && return nothing
+    return (frs.k + i, _cached_minusonepolynomial(frs, @inbounds(frs.M²[i+=1]))), i
 end
 
 function Base.iterate(frs::FacialReductionDataSliceRest{<:Any,true}, (i, row, col)::Tuple{Int,Int,Int}=(0, 1, 1))
-    i ≥ length(frs.monomials) && return nothing
+    i ≥ length(frs.M²) && return nothing
     return (frs.k + i, (row == col ? _cached_minusonepolynomial : _cached_minusonehalfpolynomial)(
-                           frs, @inbounds(frs.monomials[i+=1])
+                           frs, @inbounds(frs.M²[i+=1])
                        )),
            (row == frs.dim ? (i, 1, 1) : ((row == col ? (i, 1, col +1) : (i, row +1, col))))
 end
