@@ -257,7 +257,7 @@ If present, the output index will be in the exponent set `e`.
 function unique_outer_groupings(grouping::AbstractVector{M}; e::Union{Nothing,AbstractExponents}=nothing,
     result::Set{FastKey{I}}=Set{FastKey{isnothing(e) ? IntPolynomials._get_I(M) : indextype(e)}}()) where
     {Nr,Nc,I<:Integer,M<:IntMonomial{Nr,Nc}}
-    isempty(grouping) && return result
+    isempty(grouping) && return result, true, 0
     if isnothing(e)
         e = @inbounds grouping[begin].e
     end
