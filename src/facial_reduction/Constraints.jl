@@ -36,9 +36,12 @@ struct FacialReductionData{C<:Real,NrPlusNy,I<:Integer,MV<:IntMonomialVector{NrP
     M²_nonneg::Vector{Vector{MV}}
 
     constr_psd::Vector{Matrix{IntPolynomial{C,NrPlusNy,0,MV}}}
-    M_psd::Vector{Vector{MV}}
+    M_psd::Vector{Vector{MV}} # these three contain the products with y, i.e., they go in the gₖ that describe the constraints
     M⁺_psd::Vector{Vector{MV}}
     M²_psd::Vector{Vector{MV}}
+    M_psd_noy::Vector{Vector{MV}} # these three correspond to the original groupings; they go in the transformed objective
+    M⁺_psd_noy::Vector{Vector{MV}}
+    M²_psd_noy::Vector{Vector{MV}}
 end
 
 function FacialReductionData(relaxation::AbstractRelaxation{<:Problem{<:IntPolynomial{C,Nr,0,<:IntMonomialVector{Nr,0,I}}}};
@@ -198,19 +201,24 @@ function FacialReductionData{C,NrPlusNy,I}(relaxation::AbstractRelaxation{<:Prob
         M_psd = Vector{Vector{MV}}(undef, length(prob.constr_psd))
         M⁺_psd = similar(M_psd)
         M²_psd = similar(M_psd)
+        M_psd_noy = similar(M_psd)
+        M⁺_psd_noy = similar(M_psd)
+        M²_psd_noy = similar(M_psd)
 
         # function barrier - specialize on groupingⱼ
         function matrix_to_scalar_groupings(tmp, groupingⱼ, E, dim)
             new_groupings = FastVec{I}(buffer=length(groupingⱼ) * dim)
+            new_groupings_noy = FastVec{I}(buffer=length(groupingⱼ))
             tmpred = @view(tmp[1:Nr])
             @inbounds for mon in IntPolynomials.veciter(groupingⱼ, tmpred)
                 startidx = exponents_to_index(E, tmp)
                 for idx in startidx:startidx+dim-1
                     unsafe_push!(new_groupings, idx)
                 end
+                unsafe_push!(new_groupings_noy, exponents_to_index(E, tmpred))
             end
             @assert(issorted(new_groupings)) # if we create it in this way, it is already sorted
-            return finish!(new_groupings)
+            return finish!(new_groupings), finish!(new_groupings_noy)
         end
 
         tmp = Vector{Int}(undef, NrPlusNy)
@@ -220,10 +228,14 @@ function FacialReductionData{C,NrPlusNy,I}(relaxation::AbstractRelaxation{<:Prob
             M_psd[i] = dataᵢ = Vector{MV}(undef, length(groupings))
             M⁺_psd[i] = similar(dataᵢ)
             M²_psd[i] = similar(dataᵢ)
+            M_psd_noy[i] = data_noyᵢ = similar(dataᵢ)
+            M⁺_psd_noy[i] = similar(dataᵢ)
+            M²_psd_noy[i] = similar(dataᵢ)
             dim = size(constr, 1)
             for (j, groupingⱼ) in enumerate(groupings)
-                idxᵢ = matrix_to_scalar_groupings(tmp, groupingⱼ, E, dim)
+                idxᵢ, idx_noyᵢ = matrix_to_scalar_groupings(tmp, groupingⱼ, E, dim)
                 dataᵢ[j] = IntMonomialVector{NrPlusNy,0}(IntPolynomials.unsafe, E, idxᵢ)
+                data_noyᵢ[j] = IntMonomialVector{NrPlusNy,0}(IntPolynomials.unsafe, E, idx_noyᵢ)
             end
         end
     end
@@ -234,7 +246,7 @@ function FacialReductionData{C,NrPlusNy,I}(relaxation::AbstractRelaxation{<:Prob
         objective, M_obj, M⁺_obj, M²_obj, prefactor,
         constr_zero, M²_zero,
         constr_nonneg, M_nonneg, M⁺_nonneg, M²_nonneg,
-        constr_psd, M_psd, M⁺_psd, M²_psd
+        constr_psd, M_psd, M⁺_psd, M²_psd, M_psd_noy, M⁺_psd_noy, M²_psd_noy
     )
 end
 
@@ -294,10 +306,13 @@ function updateM²!(data::FacialReductionData{<:Any,NrPlusNy,I}; verbose::Bool=f
     isempty(data.M_nonneg) || @verbose_info("├ nonnegative constraints (", conv_time, " seconds)")
 
     conv_time = @elapsed begin
-        @inbounds for (i, groupings) in enumerate(data.M_psd)
-            for (j, groupingⱼ) in enumerate(groupings)
+        @inbounds for (i, (groupings, groupings_noy)) in enumerate(zip(data.M_psd, data.M_psd_noy))
+            for (j, (groupingⱼ, grouping_noyⱼ)) in enumerate(zip(groupings, groupings_noy))
                 data.M²_psd[i][j] = IntMonomialVector{NrPlusNy,0}(
                     IntPolynomials.unsafe, E, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=E)[1]))
+                )
+                data.M²_psd_noy[i][j] = IntMonomialVector{NrPlusNy,0}(
+                    IntPolynomials.unsafe, E, sort!(convert.(I, unique_outer_groupings(grouping_noyⱼ, e=E)[1]))
                 )
             end
         end
@@ -491,8 +506,8 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
         @assert(isone(idxinner) && isone(idxmon))
     end
     if pos === :psd
-        while idxouter ≤ length(frs.data.M²_psd)
-            grouping = @inbounds frs.data.M²_psd[idxouter]
+        while idxouter ≤ length(frs.data.M²_psd_noy)
+            grouping = @inbounds frs.data.M²_psd_noy[idxouter]
             while idxinner ≤ length(grouping)
                 mons = @inbounds grouping[idxinner]
                 while idxmon ≤ length(mons)
