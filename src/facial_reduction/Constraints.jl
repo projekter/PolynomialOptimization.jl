@@ -56,10 +56,25 @@ function FacialReductionData(relaxation::AbstractRelaxation{<:Problem{<:IntPolyn
 end
 
 function _change_var_numbers(mv::IntMonomialVector{Nr,0,I}, ::Val{newNr}) where {Nr,I<:Integer,newNr}
+    # TODO: we might instead go for ExponentsMultideg, which is more economical in terms of index usage, as we can limit the
+    # y variables to maxdeg 2.
     newE = ExponentsAll{newNr,I}()
+    @assert(typeof(newNr) == typeof(Nr)) # we should always have Ints here, but we cannot enforce it
+    if newNr === Nr
+        if mv isa IntMonomialVector{Nr,0,I,Tuple{ExponentsAll{Nr,I},Vector{I}}}
+            return mv
+        elseif mv isa IntMonomialVector{Nr,0,I,<:Tuple{ExponentsAll{Nr,I},AbstractUnitRange{I}}}
+            return IntMonomialVector{Nr,0}(unsafe, newE, collect(mv.indices))
+        elseif mv isa IntMonomialVector{Nr,0,I,<:Union{ExponentsDegree{Nr,I},<:Tuple{ExponentsDegree{Nr,I},AbstractUnitRange{I}}}}
+            return IntMonomialVector{Nr,0}(unsafe, newE, collect(range(convert_index(newE, mv.e, first(mv.indices)),
+                                                                       convert_index(newE, mv.e, last(mv.indices)))))
+        else
+            return IntMonomialVector{Nr,0}(unsafe, newE, convert_index.(newE, mv.e, mv.indices))
+        end
+    end
     result = FastVec{I}(buffer=length(mv))
     expBuf = Vector{Int}(undef, max(Nr, newNr))
-    fill!(@view(exps[Nr+1:newNr]), 0)
+    fill!(@view(expBuf[Nr+1:newNr]), 0)
     oldBuf = @view(expBuf[1:Nr])
     newBuf = @view(expBuf[1:newNr])
     for m in IntPolynomials.veciter(mv, oldBuf)
