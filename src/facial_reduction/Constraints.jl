@@ -132,14 +132,14 @@ function FacialReductionData{C,Nr,NrPlusNy,I}(relaxation::AbstractRelaxation{<:P
     isempty(prob.constr_nonneg) || @verbose_info("├ nonnegative constraints (", conv_time, " seconds)")
 
     conv_time = @elapsed begin
+        # we don't need to assign the lower triangle at all, so let's do it explicitly
         constr_psd = Vector{Matrix{IntPolynomial{C,NrPlusNy,0,GMatrix}}}(undef, length(prob.constr_psd))
         @inbounds for (i, psdᵢ) in enumerate(prob.constr_psd)
-            for col in 1:size(psdᵢ, 1), row in 1:col
-                constr_psd[i][row, col] = _change_var_numbers.(psdᵢ, Val(NrPlusNy))
+            constr_psd[i] = constr_psdᵢ = similar(psdᵢ, IntPolynomial{C,NrPlusNy,0,GMatrix})
+            for col in 1:size(psdᵢ, 2), row in 1:col
+                constr_psdᵢ[row, col] = _change_var_numbers(psdᵢ[row, col], Val(NrPlusNy))
             end
-            # we don't assign the lower triangle
         end
-        M_psd = Vector{Vector{IntMonomialVector{NrPlusNy,0,I}}}(undef, length(prob.constr_psd))
         M⁺_psd = similar(M_psd)
         monomials_psd = Vector{Vector{GMatrix}}(undef, length(prob.constr_psd))
         tmp = Vector{Int}(undef, NrPlusNy)
