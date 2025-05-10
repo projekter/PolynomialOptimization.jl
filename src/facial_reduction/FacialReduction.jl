@@ -93,7 +93,7 @@ function updateM⁺!(data::FacialReductionData; verbose::Bool=false)
             M⁺s .= M⁺.(groupings; verbose)
         end
     end
-    isempty(data.M_psd) || @verbose_info("├ PSD constraints (", conv_time, " seconds)")
+    isempty(data.M_psd) || @verbose_info("├ PSD constraints (", upd_time, " seconds)")
 
     @verbose_info("└ End updating M⁺")
     return data
@@ -104,11 +104,10 @@ end
     # p ∈ ̂Σ(M)⟂ = Σ(M)⟂, which is simply the set of all polynomials in ℝ_{2d} with exponents not in M + M
     # We need to figure out whether ∃m₁, m₂ ∈ M : m = m₁ + m₂.
     # Clearly, this implies that degree(m₁) + mindegree(M) ≤ degree(m) ≤ degree(m₁) + maxdegree(M)
-    # Therefore, we can restrict our search for m₁ to degree(m) - maxdegree(M) ≤ degree(m₁) ≤ degree(m) + mindegree(M)
-    # and, more loosely, 2mindegree(M) ≤ degree(m) ≤ 2maxdegree(M)
+    # Therefore, we can restrict our search for m₁ to degree(m) - maxdegree(M) ≤ degree(m₁) ≤ degree(m) - mindegree(M).
     @assert(length(newExponents) ≥ Nr)
     d = degree(m)
-    drange = degree_range(M.e, d-maxdegM:d+mindegM)
+    drange = degree_range(M.e, d-maxdegM:d-mindegM)
     # It would be good to specify degree here; but we don't know whether the exponent set actually contains monomials of the
     # boundary degrees.
     subvector = @view(M[range(searchsortedfirst(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, first(drange))),

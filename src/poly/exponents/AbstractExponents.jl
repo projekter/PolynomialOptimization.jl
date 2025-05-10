@@ -185,10 +185,12 @@ degree that is associated with `index` has already been initialized, else the fu
 """
 degree_range(::Unsafe, e::AbstractExponents, degree::Integer) = degree_range(unsafe, e, degree:degree)
 
-function degree_range(::Unsafe, e::AbstractExponents, degree::AbstractUnitRange)
+function degree_range(::Unsafe, e::AbstractExponents{<:Any,I}, degree::AbstractUnitRange) where {I<:Integer}
+    d₁ = max(0, first(degree))
+    d₂ = last(degree)
+    d₁ > d₂ && return one(I):zero(I)
     counts = index_counts(unsafe, e)
-    @inbounds return range(iszero(first(degree)) ? one(eltype(counts)) : counts[first(degree), 1] + one(eltype(counts)),
-                           counts[last(degree)+1, 1])
+    @inbounds return range(iszero(d₁) ? one(I) : counts[d₁, 1] + one(I), counts[d₂+1, 1])
 end
 
 """
@@ -199,13 +201,15 @@ range.
 """
 degree_range(e::AbstractExponents, degree::Integer) = degree_range(e, degree:degree)
 
-function degree_range(e::AbstractExponents, degree::AbstractUnitRange)
-    counts, success = index_counts(e, last(degree) +1)
+function degree_range(e::AbstractExponents{<:Any,I}, degree::AbstractUnitRange) where {I<:Integer}
+    d₁ = max(0, first(degree))
+    d₂ = last(degree)
+    d₁ > d₂ && return one(I):zero(I)
+    counts, success = index_counts(e, d₂ +1)
     if !success
-        degree = min(first(degree), size(counts, 1) -1):min(last(degree), size(counts, 1) -1)
+        degree = min(d₁, size(counts, 1) -1):min(d₂, size(counts, 1) -1)
     end
-    @inbounds return range(iszero(first(degree)) ? one(eltype(counts)) : counts[first(degree), 1] + one(eltype(counts)),
-                           counts[last(degree)+1, 1])
+    @inbounds return range(iszero(d₁) ? one(I) : counts[d₁, 1] + one(I), counts[d₂+1, 1])
 end
 
 """

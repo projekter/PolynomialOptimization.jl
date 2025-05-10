@@ -203,7 +203,7 @@ _sumlen(x) = intsum(length, x)
 
 function Base.getproperty(data::FacialReductionData, field::Symbol)
     field === :numM⁺ && return _sumlen(data.M⁺_obj) + intsum(_sumlen, data.M⁺_nonneg) + intsum(_sumlen, data.M⁺_psd)
-    field === :numSOS && return 1 + _sumlen(data.constr_nonneg) + _sumlen(data.constr_psd)
+    field === :numSOS && return 1 + _sumlen(data.M²_nonneg) + _sumlen(data.M²_psd)
     field === :numMons && return (iszero(data.prefactor) ? 1 : 2) + _sumlen(data.M²_obj) +
         _sumlen(data.M²_zero) + intsum(_sumlen, data.M²_nonneg) + intsum(_sumlen, data.M²_psd)
     return getfield(data, field)
@@ -239,7 +239,7 @@ function updateM²!(data::FacialReductionData{<:Any,Nr,NrPlusNy,I}; verbose::Boo
         @inbounds for (i, groupings) in enumerate(data.M_psd)
             for (j, groupingⱼ) in enumerate(groupings)
                 data.M²_psd[i][j] = IntMonomialVector{NrPlusNy,0}(
-                    IntPolynomials.unsafe, eNatrix, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=eMatrix)[1]))
+                    IntPolynomials.unsafe, eMatrix, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=eMatrix)[1]))
                 )
             end
         end
