@@ -1,6 +1,6 @@
 mutable struct FRState
     const task::Mosek.Task
-    const newExponents::Vector{Int}
+    const newExponents::Matrix{Int}
     const numM⁺::Int
     numvars_avail::Int
     numvars::Int
@@ -10,7 +10,6 @@ mutable struct FRState
 
     function FRState(data::FacialReduction.FacialReductionData{<:Real,NrPlusNy}) where {NrPlusNy}
         task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
-        newExponents = Vector{Int}(undef, NrPlusNy)
 
         numM⁺ = data.numM⁺
         Mosek.appendvars(task, numM⁺) # these are the λ variables
@@ -26,7 +25,7 @@ mutable struct FRState
 
         new(
             task,
-            Vector{Int}(undef, NrPlusNy),
+            Matrix{Int}(undef, NrPlusNy, Threads.nthreads()),
             numM⁺, numM⁺, numM⁺, falses(numM⁺),
             numgs, 0
         )
