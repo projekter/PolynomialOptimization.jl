@@ -1,6 +1,6 @@
 include("./shared.jl")
 using LinearAlgebra
-using PolynomialOptimization.FacialReduction: facial_reduction, reduction_methods
+using PolynomialOptimization.FacialReduction: reduction_methods
 
 macro testfrs(fn)
     esc(quote
