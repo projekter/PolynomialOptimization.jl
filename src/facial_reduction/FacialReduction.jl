@@ -162,7 +162,10 @@ function _truncate(M::IntMonomialVector{Nr,0}, M⁺::IntMonomialVector{Nr,0}, λ
             changed = true
         end
     end
-    return changed ? M[keeps] : M
+    changed || return M
+    result = M[keeps]
+    isempty(result) && error("The relaxation of the polynomial optimization problem is unbounded.")
+    return result
 end
 
 function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ::AbstractVector{Bool})
