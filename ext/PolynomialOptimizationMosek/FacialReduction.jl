@@ -8,7 +8,7 @@ mutable struct FRState
     const numgs::Int
     λidxshift::Int
 
-    function FRState(data::FacialReduction.FacialReductionData{<:Real,<:Any,NrPlusNy}) where {NrPlusNy}
+    function FRState(data::FacialReduction.FacialReductionData{<:Real,NrPlusNy}) where {NrPlusNy}
         task = Mosek.Task(Mosek.msk_global_env::Mosek.Env)
         newExponents = Vector{Int}(undef, NrPlusNy)
 
@@ -34,7 +34,7 @@ mutable struct FRState
 end
 
 function FacialReduction.facial_reduction!(state::FRState,
-    dataslice::FacialReduction.AbstractFacialReductionDataSlice{<:IntMonomialVector{<:Any,0,I}}) where {I<:Integer}
+    dataslice::FacialReduction.AbstractFacialReductionDataSlice{<:(IntPolynomial{<:Any,Nr,0,<:IntMonomialVector{Nr,0,I}} where {Nr})}) where {I<:Integer}
     pcoeffs = Dict{I,Int}()
     @inbounds for (k, gⱼₖ) in dataslice, t in terms(gⱼₖ) # k ∈ {0, ..., m}
         # sᵢ = (p + ∑_{a ∈ M⁺} λ₂ₐ e₂ₐ) × ...
@@ -62,8 +62,7 @@ function FacialReduction.facial_reduction!(state::FRState,
     return
 end
 
-function FacialReduction.facial_reduction!(::Val{:Mosek}, data::FacialReduction.FacialReductionData{<:Real,<:Any,NrPlusNy,I};
-                                           verbose::Bool) where {I<:Integer,NrPlusNy}
+function FacialReduction.facial_reduction!(::Val{:Mosek}, data::FacialReduction.FacialReductionData; verbose::Bool)
     state = FRState(data)
     for dataslice in data
         FacialReduction.facial_reduction!(state, dataslice) # function barrier
