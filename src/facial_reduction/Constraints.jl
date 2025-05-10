@@ -306,7 +306,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
             if idxinner ≤ length(grouping)
                 mons = @inbounds data.monomials_psd[idxouter][idxinner]
                 @inbounds return FacialReductionDataSliceRest{C,true}(grouping[idxinner], data.M⁺_psd[idxouter][idxinner],
-                                                                      mons, k),
+                                                                      mons, k, size(data.constr_psd[idxouter], 1)),
                                  (:psd, idxouter, idxinner +1, k + length(mons))
             else
                 idxouter += 1
@@ -435,6 +435,7 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
                         idxcol += 1
                         idxrow = 1
                     end
+                    idxcol = 1
                     idxmon += 1
                     @assert(isone(idxcol) && isone(idxrow))
                 end
@@ -452,16 +453,20 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
     return nothing # to avoid unreachable exceptions
 end
 
-struct FacialReductionDataSliceRest{C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector} <: AbstractFacialReductionDataSlice{M_,M⁺_}
+struct FacialReductionDataSliceRest{C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector,IN<:Union{Int,Nothing}} <: AbstractFacialReductionDataSlice{M_,M⁺_}
     M::M_
     M⁺::M⁺_
     monomials::Monomials
     k::Int
+    dim::IN
     extdegM::Tuple{Int,Int}
 
-    FacialReductionDataSliceRest{C,Matrix}(M::M_, M⁺::M⁺_, monomials::Monomials, k::Int) where
+    FacialReductionDataSliceRest{C,false}(M::M_, M⁺::M⁺_, monomials::Monomials, k::Int) where
         {C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector} =
-        new{C,Matrix,M_,M⁺_,Monomials}(M, M⁺, monomials, k, extdegree(M))
+        new{C,Matrix,M_,M⁺_,Monomials,Nothing}(M, M⁺, monomials, k, nothing, extdegree(M))
+    FacialReductionDataSliceRest{C,true}(M::M_, M⁺::M⁺_, monomials::Monomials, k::Int, dim::Int) where
+        {C,Matrix,M_<:IntMonomialVector,M⁺_<:IntMonomialVector,Monomials<:IntMonomialVector} =
+        new{C,Matrix,M_,M⁺_,Monomials,Int}(M, M⁺, monomials, k, extdegree(M), dim)
 end
 
 Base.eltype(::Type{<:FacialReductionDataSliceRest{C,<:Any,<:IntMonomialVector,<:IntMonomialVector,Monomials}}) where
@@ -483,5 +488,5 @@ function Base.iterate(frs::FacialReductionDataSliceRest{<:Any,true}, (i, row, co
     return (frs.k + i, (row == col ? _cached_minusonepolynomial : _cached_minusonehalfpolynomial)(
                            frs, @inbounds(frs.monomials[i+=1])
                        )),
-           (row == col ? (i, 1, col +1) : (i, row +1, col))
+           (row == frs.dim ? (i, 1, 1) : ((row == col ? (i, 1, col +1) : (i, row +1, col))))
 end
