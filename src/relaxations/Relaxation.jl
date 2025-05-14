@@ -3,7 +3,8 @@ module Relaxation
 using ..IntPolynomials, .IntPolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
     ..PolynomialOptimization.FastVector, SortingAlgorithms
 import StatsBase, Graphs, CliqueTrees
-using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted
+using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted, sizehint_!,
+    union_!
 import ..PolynomialOptimization: poly_problem, iterate!
 
 export AbstractRelaxation, basis, groupings, iterate!

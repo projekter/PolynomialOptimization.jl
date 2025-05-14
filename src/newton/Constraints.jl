@@ -13,7 +13,7 @@ function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set, e, range₁, groupi
     if !isnothing(sync)
         lock(sync)
         try
-            union!(mons_idx_set, this_set)
+            union_!(mons_idx_set, this_set)
         finally
             unlock(sync)
         end
@@ -36,7 +36,7 @@ function grouping_loop(::Val{0}, ::Val, ::Val{true}, mons_idx_set, e, range, gro
     if !isnothing(sync)
         lock(sync)
         try
-            union!(gl.mons_idx_set, this_set)
+            union_!(gl.mons_idx_set, this_set)
         finally
             unlock(sync)
         end
@@ -63,7 +63,7 @@ function grouping_loop(::Val{0}, ::Val, ::Val{false}, mons_idx_set, e, range, gr
     if !isnothing(sync)
         lock(sync)
         try
-            union!(mons_idx_set, this_set)
+            union_!(mons_idx_set, this_set)
         finally
             unlock(sync)
         end
@@ -203,7 +203,8 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
         isz = constrs === zero
         for (groupings, constrᵢ) in zip(constr_groupings, constrs)
             newbound = length(constrᵢ) * sum(∘(trisize, length), groupings)
-            sizehint!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : (isz ? 4newbound : 2newbound)))
+            sizehint_!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : (isz ? 4newbound : 2newbound)),
+                shrink=false)
             for grouping in groupings
                 grouping_loop(Val(Nr), Val(Nc), Val(!isz), mons_idx_set, e, grouping, constrᵢ)
             end
@@ -220,7 +221,7 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
     for (groupings, psdᵢ) in zip(groupings.psds, psd)
         dim = size(psdᵢ, 1)
         newbound = sum(∘(trisize, length), groupings) * sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0)
-        sizehint!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : 2newbound))
+        sizehint_!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : 2newbound), shrink=false)
         @inbounds for j in 1:dim
             for i in 1:j-1
                 for grouping in groupings

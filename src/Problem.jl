@@ -229,16 +229,16 @@ function poly_problem(objective::P;
     #region List of variables
     vars = sort!(collect(let vars = Set(variables(objective))
         for c in zero
-            union!(vars, variables(c))
+            union_!(vars, variables(c))
         end
         for c in nonneg
-            union!(vars, variables(c))
+            union_!(vars, variables(c))
         end
         for c in psd
-            union!(vars, variables(c))
+            union_!(vars, variables(c))
         end
         # Simple polynomial does not allow for conjugates, but we need to make sure all the base variables are included
-        filter!(∘(!, isconj), union!(vars, conj.(vars)))
+        filter!(∘(!, isconj), union_!(vars, conj.(vars)))
     end), rev=true) # for better compatibility with DynamicPolynomials, we reverse-sort the variables.
     #endregion
 

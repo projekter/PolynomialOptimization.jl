@@ -3,7 +3,7 @@ for f in (:variables, :effective_variables)
         isempty(m) && return variable_union_type(eltype(m))[]
         result = Set{variable_union_type(eltype(m))}()
         for x in m
-            union!(result, $f(x))
+            union_!(result, $f(x))
         end
         return sort!(collect(result))
     end
@@ -16,7 +16,7 @@ function MultivariatePolynomials.effective_variables(m::AbstractMatrix{<:IntPoly
     a, rest = Iterators.peel(m)
     @inbounds result = effective_variables(a; rettype=Set, by)
     for x in rest
-        union!(result, effective_variables(x; rettype=Set, by))
+        union_!(result, effective_variables(x; rettype=Set, by))
     end
     V <: Vector && return sort!(collect(result))
     return result

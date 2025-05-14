@@ -274,7 +274,7 @@ function poly_solutions(::Val{Symbol("heuristic-postprocess")}, moments::MomentV
             end
             delete!(unknown_phases, candidate_index)
             solutions = typeof(candidate)[]
-            sizehint!(callstack, length(callstack) + length(candidate_phases))
+            sizehint_!(callstack, length(callstack) + length(candidate_phases), shrink=false)
             for candidate_phase in candidate_phases
                 candidateᵢ = copy(candidate)
                 candidateᵢ[candidate_index] *= cis(candidate_phase)

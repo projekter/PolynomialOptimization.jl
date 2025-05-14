@@ -22,7 +22,7 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
             # while clique graph contains positive weights
             w ≤ 0 && break
             # merge cliques
-            union!(cliques[i], cliques[j])
+            union_!(cliques[i], cliques[j])
             idx[j] = false
             # In every iteration, we have to search through n^2 elements, we have to reset n-1 elements and also recalculate
             # n-1 elements. The calculation a^3+b^3-c^3 itself consists of 6 multiplications, one addition and one subtraction

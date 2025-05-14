@@ -258,7 +258,7 @@ function unique_outer_groupings(grouping::AbstractVector{M}, result::Set{FastKey
     # To avoid rehashings, get an overestimator of the total grouping size first.
     # TODO (maybe): In the first loop to populate unique_groupings, we determine whether the grouping is real-valued. So we
     # could instead populate two sets, saving isreal and a lot of conditionals in the second loop.
-    result = sizehint!(result, length(result) + (iszero(Nc) ? trisize(length(grouping)) : length(grouping)^2))
+    result = sizehint_!(result, length(result) + (iszero(Nc) ? trisize(length(grouping)) : length(grouping)^2), shrink=false)
     real_grouping = true
     totalsize = 0
     for (i, g₁) in enumerate(grouping)

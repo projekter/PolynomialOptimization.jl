@@ -162,16 +162,16 @@ function SparsityTerm(relaxation::AbstractRelaxation{P}; method::Union{TermMode,
         # ExponentsAll, but has a short path for recognizing when it already is given in this way, so it can be optimized to
         # just grab the field value if everything is as it should be.
         support_union = Set{I}(Iterators.map(monomial_index, monomials(prob.objective)))
-        union!(support_union, Iterators.map(monomial_index, monomials(prob.prefactor)))
+        union_!(support_union, Iterators.map(monomial_index, monomials(prob.prefactor)))
         # ^ this is for the minimal value that is subtracted from the objective
         @unroll for constrs in (prob.constr_zero, prob.constr_nonneg, prob.constr_psd)
             for constr in constrs
-                union!(support_union, Iterators.map(monomial_index, monomials(constr)))
+                union_!(support_union, Iterators.map(monomial_index, monomials(constr)))
             end
         end
         if !iszero(Nr)
             for grouping in parent.obj
-                union!(support_union, _SquareBasis(grouping))
+                union_!(support_union, _SquareBasis(grouping))
             end
         end
     end
@@ -254,7 +254,7 @@ function _extend_graphs!(::Val{TERM_MODE_CLIQUES}, g::Graphs.SimpleGraph{Int}, :
     edge_sets = [Set{Int}() for _ in 1:Graphs.nv(g)]
     @inbounds for mc in cliques
         for c in mc
-            union!(edge_sets[c], mc)
+            union_!(edge_sets[c], mc)
         end
     end
     ne = 0
@@ -388,8 +388,8 @@ function _iterate_supports(parent::RelaxationGroupings, localizing_supports::Vec
             localizing_support = localizing_supports[ipoly]
             for grouping in constr_groupings
                 graph = g[igroup]
-                sizehint!(support_union, length(support_union) +
-                    (iszero(Nc) ? 1 : 2) * Graphs.ne(graph) * length(localizing_support))
+                sizehint_!(support_union, length(support_union) +
+                    (iszero(Nc) ? 1 : 2) * Graphs.ne(graph) * length(localizing_support), shrink=false)
                 grouping_loop(grouping, localizing_support, graph) # here a function barrier is good
                 igroup += 1
             end

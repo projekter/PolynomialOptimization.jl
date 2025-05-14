@@ -2,7 +2,7 @@ module Newton
 
 using MultivariatePolynomials, ..IntPolynomials, ..IntPolynomials.MultivariateExponents, ..FastVector, Printf
 import BufferedStreams
-using ..PolynomialOptimization: @assert, @verbose_info, @capture, @allocdiff, @unroll, haveMPI, FastKey
+using ..PolynomialOptimization: @assert, @verbose_info, @capture, @allocdiff, @unroll, haveMPI, FastKey, sizehint_!, union_!
 using ..Relaxation: RelaxationGroupings
 using ..Solver: trisize
 
