@@ -1,10 +1,14 @@
-function grouping_loop(mons_idx_set, e, groupings, monₜ, ::Tuple{}, sync)
+function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set, e, range₁, grouping, constr, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
-    for grouping in groupings, (i, g₁) in enumerate(grouping), g₂ in Iterators.take(grouping, i)
-        push!(this_set,
-            FastKey(monomial_index(e, g₁, monₜ, g₂)),
-            FastKey(monomial_index(e, g₂, monₜ, g₁))
-        )
+    # TODO: veciter? range₁ are at most two units ranges
+    @inbounds for t in constr
+        monₜ = monomial(t)
+        for i in range₁
+            g₁ = grouping[i]
+            for g₂ in Iterators.take(grouping, i)
+                push!(this_set, FastKey(monomial_index(e, g₁, monₜ, g₂)))
+            end
+        end
     end
     if !isnothing(sync)
         lock(sync)
@@ -17,16 +21,17 @@ function grouping_loop(mons_idx_set, e, groupings, monₜ, ::Tuple{}, sync)
     return
 end
 
-function grouping_loop(mons_idx_set, e, groupings, monₜ, (monₜe,)::Tuple{Any}, sync)
+function grouping_loop(::Val{0}, ::Val, ::Val{true}, mons_idx_set, e, range, grouping, constr, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
-    for grouping in groupings, (i, g₁) in enumerate(grouping), g₂ in Iterators.take(grouping, i)
-        # While the prefactor is g₁*conj(g₂), we drop the conjugates anyway.
-        # Note that no prefactor has a single conjugate component; and while the monomials might have them, the
-        # conjugates will come up later anyway!
-        push!(this_set,
-            FastKey(exponents_sum(e, g₁, monₜe)), # KillConjugates(g₁*monₜ*ḡ₂)
-            FastKey(exponents_sum(e, g₂, monₜe)), # KillConjugates(g₂*monₜ*ḡ₁)
-        )
+    gview = @inbounds @view grouping[range]
+    for t in constr
+        monₜe = KillConjugates{0}(exponents(monomial(t)))
+        for g in gview
+            # While the prefactor is g₁*conj(g₂), we drop the conjugates anyway.
+            # Note that no prefactor has a single conjugate component; and while the monomials might have them, the
+            # conjugates will come up later anyway!
+            push!(this_set, FastKey(exponents_sum(e, exponents(g), monₜe)[1])) # KillConjugates(g*monₜ*ḡ₂)
+        end
     end
     if !isnothing(sync)
         lock(sync)
@@ -39,16 +44,21 @@ function grouping_loop(mons_idx_set, e, groupings, monₜ, (monₜe,)::Tuple{Any
     return
 end
 
-function grouping_loop(mons_idx_set, e, groupings, monₜ, (monₜe, monₜec)::Tuple{Any,Any}, sync)
+function grouping_loop(::Val{0}, ::Val, ::Val{false}, mons_idx_set, e, range, grouping, constr, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
-    for grouping in groupings, (i, g₁) in enumerate(grouping), g₂ in Iterators.take(grouping, i)
-        # Here, it is not guaranteed that we will see the conjugates later on.
-        push!(this_set,
-            FastKey(exponents_sum(e, g₁, monₜe)), # KillConjugates(g₁*monₜ*ḡ₂)
-            FastKey(exponents_sum(e, g₁, monₜec)), # KillConjugates(g₁*conj(monₜ)*ḡ₂)
-            FastKey(exponents_sum(e, g₂, monₜe)), # KillConjugates(g₂*monₜ*ḡ₁)
-            FastKey(exponents_sum(e, g₂, monₜec)), # KillConjugates(g₂*conj(monₜ)*ḡ₁)
-        )
+    gview = @inbounds @view grouping[range]
+    for t in constr
+        monₜ = monomial(t)
+        monₜe = KillConjugates{0}(exponents(monₜ))
+        monₜec = KillConjugates{0}(exponents(IntConjMonomial(monₜ)))
+        for g in gview
+            # Here, it is not guaranteed that we will see the conjugates later on.
+            ge = exponents(g)
+            push!(this_set,
+                FastKey(exponents_sum(e, ge, monₜe)[1]), # KillConjugates(g₁*monₜ*ḡ₂)
+                FastKey(exponents_sum(e, ge, monₜec)[1]) # KillConjugates(g₁*conj(monₜ)*ḡ₂)
+            )
+        end
     end
     if !isnothing(sync)
         lock(sync)
@@ -63,38 +73,49 @@ end
 
 # Out of necessity, our groupings contain abstract types. Given that the number of groupings will be manageable, but the
 # groupings themselves can be quite large, it pays off to introduce a function barrier specializing on the actual type.
-function grouping_loop(::Val{Nr}, ::Val{Nc}, ::Val{constr_is_real}, mons_idx_set, e, grouping, monₜ) where {Nr,Nc,constr_is_real}
-    if iszero(Nc)
-        args = ()
-    else
-        monₜe = KillConjugates{Nr}(exponents(monₜ))
-        if constr_is_real
-            args = (monₜe,)
-        else
-            args = (monₜe, KillConjugates{Nr}(exponents(IntConjMonomial(monₜ))))
-        end
-    end
+function grouping_loop(Nr::Val, ::Val{Nc}, constr_is_real::Val, mons_idx_set, e, grouping, constr) where {Nc}
     nthreads = Threads.nthreads()
     if isone(nthreads) || length(grouping) < 100
-        grouping_loop(mons_idx_set, e, (grouping,), monₜ, args, nothing)
-    else
+        grouping_loop(Nr, Val(Nc), constr_is_real, mons_idx_set, e, 1:length(grouping), grouping, constr, nothing)
+    elseif iszero(Nc)
         # The first entry in grouping has length 1, the second length 2, ...; consider this when dividing the search space.
         # A single task will always do n items from the beginning plus n items from the end, giving a constant number of
         # iterations.
         iterations = div(length(grouping), 2, RoundUp)
         iterationsperthread = div(iterations, nthreads, RoundUp)
-        startiterations = @view(grouping[1:iterations])
-        enditerations = @view(grouping[iterations+1:end])
         startindex = 1
         ccall(:jl_enter_threaded_region, Cvoid, ())
         try
             threads = Vector{Task}(undef, nthreads)
             sync = Threads.SpinLock()
             @inbounds for tid in 1:nthreads
-                @views thisiter = (startiterations[startindex:min(startindex+iterationsperthread-1, iterations-1)],
-                                   enditerations[startindex:min(startindex+iterationsperthread-1, length(enditerations))])
+                ranges₁ = Iterators.flatten(
+                    (startindex:min(startindex + iterationsperthread -1, iterations),
+                     range(max(length(grouping) - startindex +1 - iterationsperthread, iterations) +1,
+                           length(grouping) - startindex +1))
+                )
                 startindex += iterationsperthread
-                threads[tid] = Threads.@spawn grouping_loop($mons_idx_set, $e, $thisiter, $monₜ, $args, $sync)
+                threads[tid] = Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges₁,
+                                                            $grouping, $constr, $sync)
+            end
+            for thread in threads
+                wait(thread)
+            end
+        finally
+            ccall(:jl_exit_threaded_region, Cvoid, ())
+        end
+    else
+        iterations = length(grouping)
+        iterationsperthread = div(iterations, nthreads, RoundUp)
+        startindex = 1
+        try
+            threads = Vector{Task}(undef, iszero(Nc) ? nthreads : 2nthreads)
+            sync = Threads.SpinLock()
+            @inbounds for tid in 1:nthreads
+                ranges = startindex:min(startindex + iterationsperthread -1, iterations)
+                startindex += iterationsperthread
+                threads[tid] = Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges,
+                                                            $grouping, $constr, $sync)
             end
             for thread in threads
                 wait(thread)
@@ -183,11 +204,8 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
         for (groupings, constrᵢ) in zip(constr_groupings, constrs)
             newbound = length(constrᵢ) * sum(∘(trisize, length), groupings)
             sizehint!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : (isz ? 4newbound : 2newbound)))
-            for t in constrᵢ
-                monₜ = monomial(t)
-                for grouping in groupings
-                    grouping_loop(Val(Nr), Val(Nc), Val(!isz), mons_idx_set, e, grouping, monₜ)
-                end
+            for grouping in groupings
+                grouping_loop(Val(Nr), Val(Nc), Val(!isz), mons_idx_set, e, grouping, constrᵢ)
             end
         end
     end
@@ -203,12 +221,14 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
         dim = size(psdᵢ, 1)
         newbound = sum(∘(trisize, length), groupings) * sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0)
         sizehint!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : 2newbound))
-        @inbounds for j in 1:dim, i in 1:j
-            for t in psdᵢ[i, j]
-                monₜ = monomial(t)
+        @inbounds for j in 1:dim
+            for i in 1:j-1
                 for grouping in groupings
-                    grouping_loop(Val(Nr), Val(Nc), Val(i == j), mons_idx_set, e, grouping, monₜ)
+                    grouping_loop(Val(Nr), Val(Nc), Val(false), mons_idx_set, e, grouping, psdᵢ[i, j])
                 end
+            end
+            for grouping in groupings
+                grouping_loop(Val(Nr), Val(Nc), Val(true), mons_idx_set, e, grouping, psdᵢ[j, j])
             end
         end
     end
