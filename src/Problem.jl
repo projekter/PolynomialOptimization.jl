@@ -355,11 +355,13 @@ function poly_problem(objective::P;
     sprefactor = IntPolynomial{monomial_index_type}(factor_coercive, T; vars)
     szero = FastVec{typeof(sobj)}(buffer=length(zero))
     for zeroᵢ in zero
-        unsafe_push!(szero, IntPolynomial{monomial_index_type}(zeroᵢ, T; vars))
+        zeroconv = IntPolynomial{monomial_index_type}(zeroᵢ, T; vars)
+        iszero(zeroconv) || unsafe_push!(szero, zeroconv)
     end
     snonneg = FastVec{typeof(sobj)}(buffer=length(nonneg))
     for nonnegᵢ in nonneg
-        unsafe_push!(snonneg, IntPolynomial{monomial_index_type}(nonnegᵢ, T; vars))
+        nonnegconv = IntPolynomial{monomial_index_type}(nonnegᵢ, T; vars)
+        iszero(nonnegconv) || unsafe_push!(snonneg, nonnegconv)
     end
     spsd = FastVec{Matrix{typeof(sobj)}}(buffer=length(psd))
     for psdᵢ in psd
