@@ -22,7 +22,14 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
     if !isempty(zero) || !isempty(nonneg)
         ∇zero = [differentiate.((z,), variables) for z in zero]
         ∇nonneg = [differentiate.((n,), variables) for n in nonneg]
-        Cᵀ = hcat(transpose(hcat(∇zero..., ∇nonneg...)), Diagonal([constr for zn in (zero, nonneg) for constr in zn]))
+        Cᵀ = hcat(transpose(if isempty(∇zero)
+                                reduce(hcat, ∇nonneg)
+                            elseif isempty(∇nonneg)
+                                reduce(hcat, ∇zero)
+                            else
+                                hcat(reduce(hcat, ∇zero), reduce(hcat, ∇nonneg))
+                            end),
+                  Diagonal([constr for zn in (zero, nonneg) for constr in zn]))
         if verbose
             # println("C:")
             # show(stdout, "text/plain", transpose(Cᵀ))
@@ -44,7 +51,7 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
         @inbounds coeffsᵀ = [[similar_variable(V, Symbol(coeffprefix, "[", k, ",", j, ",", i, "]"))
                               for i in 1:binomial(n + Ldeg, n)] for k in axes(Cᵀ, 2), j in axes(Cᵀ, 1)]
         mons = [monomials(variables, [deg]) for deg in 0:Ldeg]
-        @inbounds Lᵀ = [polynomial(polynomial.(coeffsᵀ[k, j]), vcat(@view(mons[1:Ldeg+1])...))
+        @inbounds Lᵀ = [polynomial(polynomial.(coeffsᵀ[k, j]), reduce(vcat, @view(mons[1:Ldeg+1])))
                         for k in axes(coeffsᵀ, 1), j in axes(coeffsᵀ, 2)]
         CᵀLᵀid = Cᵀ * Lᵀ - I
         # now we have our candidate for L with completely unknown coefficients. Compare the coefficients of L*C with those
@@ -81,7 +88,7 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
                     end
                     cols[i] = sparsevec(finish!(idxs), finish!(vals), m)
                 end
-                spmat = copy(transpose(hcat(cols...))) # todo: can we instead directly create the transposed version?
+                spmat = copy(transpose(reduce(hcat, cols))) # todo: can we instead directly create the transposed version?
                 try
                     # solution = spmat \ rhs - but the system may be underdetermined and we want the solution with the most
                     # zeros
@@ -126,7 +133,10 @@ function tighten!(method::Val, objective::P, variables::AbstractVector{V}, zero:
                     new_coeffsprefix = gensym()
                     new_coeffs = [similar_variable(V, Symbol(new_coeffsprefix, "[", i, "]")) for i in 1:num]
                     append!(flatvars, new_coeffs)
-                    push!(mons2, (new_coeffs .=> (m+1):(m+num))...)
+                    sizehint!(mons2, length(mons2) + length(new_coeffs))
+                    for (k, v) in zip(new_coeffs, (m+1):(m+num))
+                        mons2[k] = v
+                    end
                     m += num
                     # update sys
                     new_poly = polynomial(polynomial.(new_coeffs), mons[deg+1])
