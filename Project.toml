@@ -49,7 +49,7 @@ PolynomialOptimizationSCS = "SCS"
 [compat]
 BufferedStreams = "1"
 COPT = "1.1.11"
-Clarabel = "0.1 - 0.10"
+Clarabel = "0.1 - 0.11"
 CliqueTrees = "1.5.1"
 Combinatorics = "1"
 ConjugateGradients = "0.1.1"
