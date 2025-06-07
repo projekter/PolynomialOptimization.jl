@@ -92,17 +92,17 @@ end
 #   contains complex coefficients/monomials, imaginary parts cancel out)
 # - or complex-valued monomials involved in the grouping, but the solver supports the complex-valued PSD cone explicitly
 # - or DD/SDD representations in the real case and in the complex case if the quadratic cone is requested
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{<:AbstractVector{M} where {M<:IntMonomial}},
     constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri},
     type::Union{Tuple{Val{true},Val},Tuple{Val{false},Val{true}}}, representation::RepresentationMethod,
     counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
     # function should not be called from the outside.
 
-    lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
+    @assert(block_size == length(grouping))
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian
-    dim = lg * block_size
+    dim = sum(length, grouping, init=0)
     complex = type isa Tuple{Val{false},Val{true}}
     if matrix_indexing
         tri = :U # we always create the data in U format, as the PSDMatrixCartesian then has to compute the row/col indices
@@ -125,13 +125,13 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
     end
 
     # introduce a method barrier to fix the potentially unknown eltype of lens due to the dynamic maxlen
-    return moment_add_matrix_helper!(state, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex), lg,
+    return moment_add_matrix_helper!(state, grouping, constraint, indextype, Val(tri), Val(matrix_indexing), Val(complex),
         block_size, dim, matrix_indexing ? (rows, indices, values) : (lens, indices, values), representation, counters)
 end
 
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{<:AbstractVector{M} where {M<:IntMonomial}},
     constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri}, ::Val{tri}, ::Val{matrix_indexing},
-    ::Val{complex}, lg, block_size, dim, data, representation::RepresentationMethod,
+    ::Val{complex}, block_size, dim, data, representation::RepresentationMethod,
     counters::Counters) where {T,V,Tri,tri,matrix_indexing,complex}
     if matrix_indexing
         rows, indices, values = data
@@ -190,14 +190,23 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
             end
         end
     end
-    @inbounds for (exp2, g₂) in enumerate(grouping)
-        isreal_g₂ = !complex || isreal(g₂)
-        for block_j in 1:block_size
-            exp1_range = (tri === :F ? (1:lg) : (tri === :U ? (1:exp2) : (exp2:lg)))
-            for (exp1, g₁) in zip(exp1_range, @view(grouping[exp1_range]))
-                isreal_g₁ = !complex || isreal(g₁)
-                for block_i in (tri === :F ? (1:block_size) : (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
-                                                                            ((exp1 == exp2 ? block_j : 1):block_size)))
+    # We need to flip the order of the blocks. In Scherer-Hol's/Lasserre's traditional approach, we have
+    # SOSP = (basis ⊗ 𝟙)ᵀ Z (basis ⊗ 𝟙) or M(G y)ᵢⱼ = ∑ₖ Γₖ yᵢ₊ⱼ₊ₖ
+    # However, this relies on the basis being the same for every matrix element. We don't necessarily have this here, so
+    # following Miller et al. (2025), we flip the identity/matrix system with the basis system, which allows to have different
+    # lengths at the inner level:
+    # SOSP = Diag(basis₁ᵀ, ..., basisₙᵀ) Z Diag(basis₁, ..., basisₙ)
+    # where Diag of column vectors gives a n × ∑ₙ length(basisₙ) matrix.
+    @inbounds for block_j in 1:block_size
+        for (exp2, g₂) in enumerate(grouping[block_j])
+            isreal_g₂ = !complex || isreal(g₂)
+            for block_i in (tri === :F ? (1:block_size) : (tri === :U ? (1:block_j) : (block_j:block_size)))
+                lgᵢ = length(grouping[block_i])
+                constr = constraint[block_i, block_j]
+                exp1_range = tri === :F ? (1:lgᵢ) : (tri === :U ? (1:(block_i == block_j ? exp2 : lgᵢ)) :
+                                                                  ((block_i == block_j ? exp2 : 1):lgᵢ))
+                for (exp1, g₁) in zip(exp1_range, @view(grouping[block_i][exp1_range]))
+                    isreal_g₁ = !complex || isreal(g₁)
                     # - !complex: all polynomials are real-valued in total. Only take into account canonical monomials, but
                     #   double the prefactor if their conjugated must also occur.
                     # - block_i == block_j && exp1 == exp2: we are on the total diagonal. Even if not all polynomials were
@@ -208,7 +217,7 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
                     ondiag = exp1 == exp2 && block_i == block_j
                     @twice secondtime (!matrix_indexing && !total_real) begin
                         curlen = 0
-                        for term_constr in constraint[block_i, block_j]
+                        for term_constr in constr
                             mon_constr = monomial(term_constr)
                             coeff_constr = coefficient(term_constr)
                             if scaleoffdiags && !ondiag
@@ -385,17 +394,17 @@ end
 
 # generic moment matrix constraint with complex-valued monomials involved in the grouping, but the solver does not support the
 # complex PSD cone explicitly
-function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{M} where M<:IntMonomial,
+function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVector{<:AbstractVector{M} where M<:IntMonomial},
     constraint::AbstractMatrix{<:IntPolynomial}, indextype::PSDIndextype{Tri},
     ::Tuple{Val{false},Val{false}}, representation::Union{<:RepresentationDD,<:RepresentationSDD,RepresentationPSD},
     counters::Counters) where {T,V,Tri}
     # Note: We rely on a lot of checks having already been done, so that the combination of arguments is always correct. This
     # function should not be called from the outside.
 
-    lg = length(grouping)
     block_size = LinearAlgebra.checksquare(constraint)
+    @assert(block_size == length(grouping))
     matrix_indexing = indextype isa PSDIndextypeMatrixCartesian
-    dim = lg * block_size
+    dim = sum(length, grouping, init=0)
     dim2 = 2dim
     if matrix_indexing
         tri = :U # we always create the data in U format, as the PSDMatrixCartesian then has to compute the row/col indices
@@ -441,24 +450,26 @@ function moment_add_matrix_helper!(state::AnySolver{T,V}, grouping::AbstractVect
         i3 = i2other + dimT
     end
     col = zero(T)
-    @inbounds for (exp2, g₂) in enumerate(grouping)
-        isreal_g₂ = isreal(g₂)
-        for block_j in 1:block_size
+    @inbounds for block_j in 1:block_size
+        for (exp2, g₂) in enumerate(grouping[block_j])
+            isreal_g₂ = isreal(g₂)
             row = tri === :L ? col : zero(T)
-            exp1_range = (tri === :F ? (1:lg) : (tri === :U ? (1:exp2) : (exp2:lg)))
             if tri === :U
                 i2other = items + col + (row * (row + T(2) * dimT + one(T))) >> 1
             elseif tri === :L
                 i2other = i2order
             end
-            for (exp1, g₁) in zip(exp1_range, @view(grouping[exp1_range]))
-                isreal_g₁ = isreal(g₁)
-                for block_i in (tri === :F ? (1:block_size) : (tri === :U ? (1:(exp1 == exp2 ? block_j : block_size)) :
-                                                                            ((exp1 == exp2 ? block_j : 1):block_size)))
+            for block_i in (tri === :F ? (1:block_size) : (tri === :U ? (1:block_j) : (block_j:block_size)))
+                lgᵢ = length(grouping[block_i])
+                constr = constraint[block_i, block_j]
+                exp1_range = (tri === :F ? (1:lgᵢ) : (tri === :U ? (1:(block_i == block_j ? exp2 : lgᵢ)) :
+                                                                   ((block_i == block_j ? exp2 : 1):lgᵢ)))
+                for (exp1, g₁) in zip(exp1_range, @view(grouping[block_i][exp1_range]))
+                    isreal_g₁ = isreal(g₁)
                     total_real = block_i == block_j && (exp1 == exp2 || (isreal_g₁ && isreal_g₂))
                     ondiag = exp1 == exp2 && block_i == block_j
                     curlen = 0
-                    for term_constr in constraint[block_i, block_j]
+                    for term_constr in constr
                         mon_constr = monomial(term_constr)
                         coeff_constr = coefficient(term_constr)
                         if scaleoffdiags && !ondiag
@@ -1633,13 +1644,16 @@ end
 #endregion
 
 """
-    moment_add_matrix!(state::AbstractSolver, grouping::IntMonomialVector,
+    moment_add_matrix!(state::AbstractSolver,
+        grouping::Union{<:IntMonomialVector,<:AbstractVector{<:IntMonomialVector}},
         constraint::Union{<:IntPolynomial,<:AbstractMatrix{<:IntPolynomial}},
         representation::RepresentationMethod=RepresentationPSD())
 
 Parses a constraint in the moment hierarchy with a basis given in `grouping` (this might also be a partial basis due to
 sparsity), premultiplied by `constraint` (which may be the unit polynomial for the moment matrix) and calls the appropriate
 solver functions to set up the problem structure according to `representation`.
+If `constraint` is a matrix, `grouping` should be a vector of monomial vectors (with length corresponding to the side
+dimension); else, it should just be a monomial vector.
 
 To make this function work for a solver, implement the following low-level primitives:
 - [`mindex`](@ref)
@@ -1661,10 +1675,11 @@ Usually, this function does not have to be called explicitly; use [`moment_setup
 
 See also [`moment_add_equality!`](@ref), [`RepresentationMethod`](@ref).
 """
-function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{M} where {M<:IntMonomial},
+function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{<:AbstractVector{M} where {M<:IntMonomial}},
     constraint::Union{P,<:AbstractMatrix{P}}, representation::RepresentationMethod=RepresentationPSD(),
     counters::Counters=Counters()) where {P<:IntPolynomial,V<:Real}
-    dim = length(grouping) * (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
+    @assert length(grouping) == (constraint isa AbstractMatrix ? LinearAlgebra.checksquare(constraint) : 1)
+    dim = sum(length, grouping, init=0)
     @assert(dim > 0)
     if (dim == 1 || (dim == 2 && (supports_rotated_quadratic(state) || supports_quadratic(state))))
         if representation isa RepresentationPSD
@@ -1676,7 +1691,8 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
         indextype = psd_indextype(state)
     end
 
-    real_valued = (length(grouping) == 1 || isreal(grouping)) && (!(constraint isa AbstractMatrix) || isreal(constraint))
+    real_valued = (((isone(length(grouping)) || grouping isa ConstantVector) && isone(length(first(grouping)))) ||
+                    isreal(grouping)) && (!(constraint isa AbstractMatrix) || isreal(constraint))
     complex_cone = !real_valued &&
         (representation isa RepresentationDD{<:Any,true} &&
             (supports_dd_complex(state) || supports_lnorm_complex(state) || supports_quadratic(state))) ||
@@ -1721,6 +1737,12 @@ function moment_add_matrix!(state::AnySolver{<:Any,V}, grouping::AbstractVector{
         counters
     )
 end
+
+moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where {M<:IntMonomial}, constraint::IntPolynomial,
+    args...) = moment_add_matrix!(state, ScalarVector(grouping), constraint, args...)
+moment_add_matrix!(state::AnySolver, grouping::AbstractVector{M} where {M<:IntMonomial},
+    constraint::AbstractMatrix{P} where {P<:IntPolynomial}, args...) =
+    moment_add_matrix!(state, ConstantVector(grouping, size(constraint, 1)), constraint, args...)
 
 """
     moment_add_equality!(state::AbstractSolver, groupings::AbstractVector{<:IntMonomialVector},
@@ -1989,7 +2011,7 @@ function moment_setup!(state::AnySolver{T,V}, relaxation::AbstractRelaxation{<:P
         for (j, g) in enumerate(groupingsᵢ)
             this_info[j] = moment_add_matrix!(state, g, constrᵢ,
                 representation isa RepresentationMethod ? representation :
-                                                          representation((:psd, i, j), length(g) * size(constrᵢ, 1)), counters)
+                                                          representation((:psd, i, j), sum(length, g, init=0)), counters)
         end
         infoᵢ += 1
     end

@@ -20,7 +20,9 @@ function groupings(problem::Problem{Prob}, basis::AbstractVector{M}, degree::Int
         IntMonomialVector{Nr,Nc,I}[basis],
         [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_zero],
         [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_nonneg],
-        [IntMonomialVector{Nr,Nc,I}[truncate_basis(basis, degree - maxhalfdegree(x))] for x in problem.constr_psd],
+        [AbstractVector{IntMonomialVector{Nr,Nc,I}}[
+            ConstantVector{IntMonomialVector{Nr,Nc,I}}(truncate_basis(basis, degree - maxhalfdegree(x)), size(x, 1))
+         ] for x in problem.constr_psd],
         [filter(∘(!, isconj), variables(problem.objective))]
     )
 end

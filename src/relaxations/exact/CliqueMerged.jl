@@ -89,6 +89,27 @@ function merge_cliques(cl::Vector{<:IntMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<
     return IntMonomialVector{Nr,Nc,I}[IntMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)) for mergedᵢ in merged]
 end
 
+function merge_cliques(cl::Vector{<:AbstractVector{<:IntMonomialVector{Nr,Nc,I}}}) where {Nr,Nc,I<:Integer}
+    dim = length(first(cl))
+    if all(Base.Fix2(isa, ConstantVector), cl)
+        converted = _convert_cliques(first.(cl))
+        merged = merge_cliques!(converted[2])
+        return AbstractVector{IntMonomialVector{Nr,Nc,I}}[
+            ConstantVector{IntMonomialVector{Nr,Nc,I}}(
+                IntMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)), dim
+            ) for mergedᵢ in merged
+        ]
+    else
+        # Difficult: each grouping potentially has a different basis vector per index. We must check whether we can merge the
+        # basis vectors for each index separately; but then we'll have to decide whether we want to accept the merge of a whole
+        # grouping (force-merging all basis vectors that were not merged before because it would not have been beneficial) or
+        # keep them separate (force-discarding the mergings found before). In order to make this decision, we should compare
+        # the total benefit per grouping.
+        error("Clique merging of semidefinite constraints with different bases per indices is not implemented yet")
+        # TODO
+    end
+end
+
 function merge_cliques(groupings::Relaxation.RelaxationGroupings{Nr,Nc}) where {Nr,Nc}
     outtype_part = Vector{<:IntMonomialVector{Nr,Nc}}
     newobj = merge_cliques(groupings.obj)

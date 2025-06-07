@@ -41,18 +41,60 @@ struct RelaxationGroupings{Nr,Nc,I<:Integer,V<:IntVariable{Nr,Nc}}
     obj::Vector{IntMonomialVector{Nr,Nc,I}}
     zeros::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
     nonnegs::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
-    psds::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
+    psds::Vector{Vector{AbstractVector{IntMonomialVector{Nr,Nc,I}}}} # every grouping has individual groupings per matrix index
     var_cliques::Vector{Vector{V}}
 end
 
-_lensort(x) = (-length(x), x) # use as "by" argument for sort to sort with descending length, standard tie-breaker
+# use as "by" argument for sort to sort with descending length, standard tie-breaker
+_lensort(x::AbstractVector{<:IntMonomialVector}) = (-sum(length, x, init=0), x)
+_lensort(x) = (-length(x), x)
 
 # We don't store the association of a grouping with a clique; we just find it anew every time. While this is not too efficient,
 # it also doesn't occur so often that we actually need this information.
 _findclique(grouping::IntMonomialVector{Nr,Nc}, var_cliques::(Vector{Vector{V}} where V<:IntVariable)) where {Nr,Nc} =
     findlast(Base.Fix1(⊆, effective_variables(grouping)), var_cliques) # put the grouping in the smallest fitting clique
+_findclique(grouping::ConstantVector{<:IntMonomialVector{Nr,Nc}}, var_cliques::(Vector{Vector{V}} where {V<:IntVariable})) where {Nr,Nc} =
+    _findclique(@inbounds(grouping[begin]), var_cliques)
+function _findclique(grouping::AbstractVector{<:IntMonomialVector{Nr,Nc}}, var_cliques::(Vector{Vector{V}} where {V<:IntVariable})) where {Nr,Nc}
+    g₁, gᵣ = Iterators.peel(grouping)
+    ef = Set(effective_variables(g₁))
+    for g in gᵣ
+        union_!(ef, effective_variables(g))
+    end
+    return findlast(Base.Fix1(⊆, ef), var_cliques)
+end
 
-function _show_groupings(io::IO, grouping::Vector{<:IntMonomialVector}, cliques)
+function _printblock(io::IO, block::IntMonomialVector, len::Int, limit::Bool; prepend::String="\n  ", append::String="")
+    # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
+    print(io, prepend, lpad(length(block), len, " "), append, " [")
+    a, rest = Iterators.peel(block)
+    show(io, "text/plain", a)
+    for x in Iterators.take(rest, limit ? 10 : length(block) -1)
+        print(io, ", ")
+        show(io, "text/plain", x)
+    end
+    limit && length(block) > 10 && print(io, ", ...")
+    print(io, "]")
+    return
+end
+
+_printblock(io::IO, block::ConstantVector{<:IntMonomialVector}, len::Int, limit::Bool) =
+    _printblock(io, @inbounds(block[begin]), len, limit, prepend="\n  - $(length(block)) indices: ")
+
+function _printblock(io::IO, block::AbstractVector{<:IntMonomialVector}, len::Int, limit::Bool)
+    sidelen = floor(Int, log10(length(block))) +1
+    firstblock = true
+    for (i, blockᵢ) in enumerate(block)
+        isempty(blockᵢ) && continue # indeed, some term sparsity methods might lead to completely decoupled indices, which then
+                                    # require the other indices to be empty
+        print(io, "\n  ", firstblock ? "-" : " ", " index ", lpad(i, sidelen, " "), ": ")
+        firstblock = false
+        _printblock(io, blockᵢ, len, limit, prepend="")
+    end
+    return
+end
+
+function _show_groupings(io::IO, grouping::Union{<:Vector{<:IntMonomialVector},<:Vector{<:AbstractVector{<:IntMonomialVector}}}, cliques)
     if get(io, :bycliques, false)::Bool
         noc = IOContext(io, :bycliques => false)
         for i in 1:length(cliques)
@@ -68,19 +110,10 @@ function _show_groupings(io::IO, grouping::Vector{<:IntMonomialVector}, cliques)
     print(io, lg, " block", isone(lg) ? "" : "s")
     iszero(lg) && return
     lensorted = sort(grouping, by=_lensort)
-    len = floor(Int, log10(length(@inbounds lensorted[begin]))) +1
+    len = floor(Int, log10(-_lensort(@inbounds lensorted[begin])[1])) +1
     limit = get(io, :limit, false)::Bool
     for block in Iterators.take(lensorted, limit ? 5 : length(lensorted))
-        # we must do the printing manually to avoid all the type cluttering. We can assume that a grouping is never empty.
-        print(io, "\n  ", lpad(length(block), len, " "), " [")
-        a, rest = Iterators.peel(block)
-        show(io, "text/plain", a)
-        for x in Iterators.take(rest, limit ? 10 : length(block) -1)
-            print(io, ", ")
-            show(io, "text/plain", x)
-        end
-        limit && length(block) > 10 && print(io, ", ...")
-        print(io, "]")
+        _printblock(io, block, len, limit)
     end
     limit && length(lensorted) > 5 && print(io, "\n  ", lpad("⋮", len, " "))
 end
@@ -120,7 +153,7 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     end
 end
 
-function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X}
+function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X<:Union{<:IntMonomialVector,<:Vector{<:IntVariable}}}
     for oldᵢ in olds
         if new ⊆ oldᵢ
             push!(to, new)
@@ -141,7 +174,24 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
     return false
 end
 
-function embed!(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where {X}
+function embed!(::Nothing, new::X, olds::AbstractVector{X}) where {X<:IntMonomialVector}
+    any(Base.Fix1(⊆, new), olds) && return
+    throw(AssertionError("Relaxation led to an enlarged grouping"))
+end
+
+function embed!(::Nothing, new::AbstractVector{X}, olds::AbstractVector{<:AbstractVector{X}}) where {X<:IntMonomialVector}
+    for oldⱼ in olds
+        if new isa ConstantVector
+            all(Base.Fix1(⊆, first(new)), oldⱼ) && return
+        else
+            all(splat(⊆), zip(new, oldⱼ)) && return
+        end
+    end
+    throw(AssertionError("Relaxation led to an enlarged grouping"))
+end
+
+function embed!(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where
+    {X<:Union{<:IntMonomialVector,<:AbstractVector{<:IntMonomialVector},<:Vector{<:IntVariable}}}
     news === olds && return news
     if X <: Vector{<:IntVariable}
         complete = true
@@ -161,7 +211,14 @@ function embed!(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean:
             @inbounds Threads.@threads for i in 1:nos
                 items = @view(news[(i-1)*batch+1:min(i*batch, length(news))])
                 for new in items
-                    any(Base.Fix1(⊆, new), olds) || throw(AssertionError("Relaxation led to an enlarged grouping"))
+                    embed!(nothing, new, olds)
+                end
+            end
+        end
+        if X <: AbstractVector{<:IntMonomialVector}
+            for i in eachindex(news)
+                if !(news[i] isa ConstantVector) && allequal(news[i])
+                    news[i] = ConstantVector{eltype(news[i])}(first(news[i]), length(news[i]))
                 end
             end
         end
@@ -173,7 +230,8 @@ function embed!(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean:
     @inbounds Threads.@threads for i in 2:length(result)
         resultᵢ = result[i]
         for j in 1:i-1
-            if !deletes[j] && resultᵢ ⊆ result[j]
+            if !deletes[j] &&
+                (X <: AbstractVector{<:IntMonomialVector} ? all(splat(⊆), zip(resultᵢ, result[j])) : resultᵢ ⊆ result[j])
                 deletes[i] = true
             end
         end
@@ -272,9 +330,9 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
             l = length(grouping)
             cliquesize[l] = get!(cliquesize, l, 0) +1
         end
-        for (constr, constr_mat) in zip(groups.psds, poly_problem(x).constr_psd), grouping in constr
+        for constr in groups.psds, grouping in constr
             cliquesize = cliquesizes_psd[_findclique(grouping, groups.var_cliques)]
-            l = length(grouping) * size(constr_mat, 1)
+            l = sum(length, grouping, init=0)
             cliquesize[l] = get!(cliquesize, l, 0) +1
         end
         for (i, (va, size_psd, size_lin)) in enumerate(zip(groups.var_cliques, cliquesizes_psd, cliquesizes_lin))
@@ -291,8 +349,8 @@ function _show(io::IO, m::MIME"text/plain", x::AbstractRelaxation, name=typeof(x
         for constr in groups.nonnegs
             mergewith!(+, bs, StatsBase.countmap(length.(constr)))
         end
-        for (constr, constr_mat) in zip(groups.psds, poly_problem(x).constr_psd)
-            mergewith!(+, bs, StatsBase.countmap(length.(constr) .* size(constr_mat, 1)))
+        for constr in groups.psds, constr_grouping in constr
+            mergewith!(+, bs, StatsBase.countmap(sum(length, constr_grouping, init=0)))
         end
         print(io, "\nPSD block sizes:\n  ", sort!(collect(bs), rev=true))
         if !isempty(groups.zeros)
@@ -334,9 +392,11 @@ See also [`poly_problem`](@ref).
 """
 function MultivariatePolynomials.degree(relaxation::AbstractRelaxation)
     gr = groupings(relaxation)
-    subdegree = v -> maximum(maxdegree_complex, v, init=0)
+    function subdegree end
+    subdegree(v) = maximum(maxdegree_complex, v, init=0)
+    subdegree(v::AbstractVector{IntMonomialVector}) = maximum(subdegree, v, init=0)
     return max(
-        maximum(maxdegree_complex, gr.obj, init=0),
+        subdegree(gr.obj),
         maximum(subdegree, gr.zeros, init=0),
         maximum(subdegree, gr.nonnegs, init=0),
         maximum(subdegree, gr.psds, init=0)

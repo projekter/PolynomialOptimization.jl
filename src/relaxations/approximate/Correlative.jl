@@ -5,7 +5,8 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     @doc """
         SparsityCorrelative(relaxation::AbstractRelaxation; [high_order_zero,]
             [high_order_nonneg,] [high_order_psd,] [low_order_zero,] [low_order_nonneg,]
-            [low_order_psd,] chordal_completion=CliqueTrees.MF(), verbose::Bool=false)
+            [low_order_psd,] chordal_completion=CliqueTrees.MF(),
+            [split_psd,] [join_psd,] verbose::Bool=false)
 
     Analyze the correlative sparsity of a problem.
     Correlative sparsity is a variable-based sparsity analysis. It was first defined by
@@ -21,6 +22,11 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     Note that the order of the constraints is also influenced by the parent relaxation. If a correlative sparsity relaxation is
     applied to another relaxation that already limited the prefactor of a constraint to be of degree zero, it must necessarily
     be of low order.
+    A PSD constraint is by default handled as one monolithic constraint. However, the groupings can also be constructed
+    separately per index; then, only variables that occur in the kᵗʰ row or kᵗʰ column are put into a clique. This corresponds
+    to setting the `split_psd` parameters to the indices of the constraints that should be separated in this way; the opposite
+    effect (default) is achieved by `join_psd`.
+    All values may also be `true` (to indicate all constraints) or `false` (to indicate none)
 
     By default, the correlative sparsity graph is completed to a chordal graph before the cliques are determined, which
     guarantees that the maximal cliques can be determined quickly; however, this may degrade the sparsity and it may be
@@ -33,26 +39,47 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
     function SparsityCorrelative(relaxation::AbstractRelaxation{P}; high_order_zero=missing,
         high_order_nonneg=missing, high_order_psd=missing, low_order_zero=missing, low_order_nonneg=missing,
         low_order_psd=missing, chordal_completion::Union{Bool,<:CliqueTrees.EliminationAlgorithm}=CliqueTrees.MF(),
-        verbose::Bool=false) where # sync with SparsityCorrelativeTerm
+        split_psd=missing, join_psd=missing, verbose::Bool=false) where # sync with SparsityCorrelativeTerm
         {Nr,Nc,I<:Integer,P<:Problem{<:IntPolynomial{<:Any,Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}}
         ((!ismissing(high_order_zero) && !ismissing(low_order_zero)) ||
             (!ismissing(high_order_nonneg) && !ismissing(low_order_nonneg)) ||
             (!ismissing(high_order_psd) && !ismissing(low_order_psd))) &&
             error("high_order_... and low_order_... specifications cannot be used at the same time")
+        !ismissing(split_psd) && !ismissing(join_psd) &&
+            error("split_psd and join_psd specifications cannot be used at the same time")
         problem = poly_problem(relaxation)
+        if high_order_zero isa Bool || low_order_zero isa Bool
+            high_order_zero = 1:(high_order_zero === true || low_order_zero === false ? length(problem.constr_zero) : 0)
+            low_order_zero = missing
+        end
+        if high_order_nonneg isa Bool || low_order_nonneg isa Bool
+            high_order_nonneg = 1:(high_order_nonneg === true || low_order_nonneg === false ?
+                                   length(problem.constr_nonneg) : 0)
+            low_order_nonneg = missing
+        end
+        if high_order_psd isa Bool || low_order_psd isa Bool
+            high_order_psd = 1:(high_order_psd === true || low_order_psd === false ? length(problem.constr_psd) : 0)
+            low_order_psd = missing
+        end
+        if split_psd isa Bool || join_psd isa Bool
+            split_psd = 1:(split_psd === true || join_psd === false ? length(problem.constr_psd) : 0)
+            join_psd = missing
+        end
         ((ismissing(high_order_zero) || high_order_zero ⊆ 1:length(problem.constr_zero)) &&
             (ismissing(low_order_zero) || low_order_zero ⊆ 1:length(problem.constr_zero)) &&
             (ismissing(high_order_nonneg) || high_order_nonneg ⊆ 1:length(problem.constr_nonneg)) &&
             (ismissing(low_order_nonneg) || low_order_nonneg ⊆ 1:length(problem.constr_nonneg)) &&
             (ismissing(high_order_psd) || high_order_psd ⊆ 1:length(problem.constr_psd)) &&
-            (ismissing(low_order_psd) || low_order_psd ⊆ 1:length(problem.constr_psd))) ||
+            (ismissing(low_order_psd) || low_order_psd ⊆ 1:length(problem.constr_psd)) &&
+            (ismissing(split_psd) || split_psd ⊆ 1:length(problem.constr_psd)) &&
+            (ismissing(join_psd) || join_psd ⊆ 1:length(problem.constr_psd))) ||
             error("Unknown constraint index specified")
 
         parent = groupings(relaxation)
         parentmaxobjdeg = maximum(maxdegree, parent.obj, init=0)::Int
         parentmaxzerodeg = Int[maximum(maxdegree, z, init=0) for z in parent.zeros]
         parentmaxnonnegdeg = Int[maximum(maxdegree, n, init=0) for n in parent.nonnegs]
-        parentmaxpsddeg = Int[maximum(maxdegree, p, init=0) for p in parent.psds]
+        parentmaxpsddeg = Int[maximum(pᵢ -> maximum(maxdegree, pᵢ, init=0), p, init=0) for p in parent.psds]
 
         @verbose_info("Constructing correlative sparsity graph")
         g = Graphs.SimpleGraph(Nr + Nc)
@@ -76,7 +103,8 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         _correlative_addedges!(g, problem.constr_zero, parent.zeros, high_order_zero, low_order_zero, parentmaxzerodeg)
         _correlative_addedges!(g, problem.constr_nonneg, parent.nonnegs, high_order_nonneg, low_order_nonneg,
             parentmaxnonnegdeg)
-        _correlative_addedges!(g, problem.constr_psd, parent.psds, high_order_psd, low_order_psd, parentmaxpsddeg)
+        _correlative_addedges!(g, problem.constr_psd, parent.psds, high_order_psd, low_order_psd, parentmaxpsddeg, split_psd,
+            join_psd)
 
         @verbose_info("Determining cliques")
         if chordal_completion === true
@@ -102,7 +130,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         newobj = Vector{IntMonomialVector{Nr,Nc,I}}(undef, length(cliques))
         newzero = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_zero)]
         newnonneg = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_nonneg)]
-        newpsd = [IntMonomialVector{Nr,Nc,I}[] for _ in 1:length(problem.constr_psd)]
+        newpsd = [AbstractVector{IntMonomialVector{Nr,Nc,I}}[] for _ in 1:length(problem.constr_psd)]
         @inbounds for (i, clique) in enumerate(cliques)
             maxmultideg = zeros(Int, Nr + 2Nc)
             fill!(@view(maxmultideg[clique]), parentmaxobjdeg)
@@ -110,7 +138,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
         end
         _correlative_gengroupings!(newzero, cliques, problem.constr_zero, parentmaxzerodeg)
         _correlative_gengroupings!(newnonneg, cliques, problem.constr_nonneg, parentmaxnonnegdeg)
-        _correlative_gengroupings!(newpsd, cliques, problem.constr_psd, parentmaxpsddeg)
+        _correlative_gengroupings!(newpsd, cliques, problem.constr_psd, parentmaxpsddeg, split_psd, join_psd)
         @verbose_info("Generated new groupings; embedding in old.")
         gentime = @elapsed(gr = embed!(
             RelaxationGroupings(newobj, newzero, newnonneg, newpsd, map.(IntVariable{Nr,Nc}, cliques)),
@@ -124,7 +152,11 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
 end
 
 function _correlative_addedges!(g::Graphs.SimpleGraph, constrs,
-    parentgroupings::Vector{Vector{IntMonomialVector{Nr,Nc,I}}} where {Nr,Nc,I<:Integer}, h, l, md)
+    parentgroupings::Union{Vector{Vector{IntMonomialVector{Nr,Nc,I}}},
+                           Vector{Vector{AbstractVector{IntMonomialVector{Nr,Nc,I}}}}} where {Nr,Nc,I<:Integer}, h, l, md,
+    splits=nothing, joins=nothing)
+    @assert isnothing(splits) == isnothing(joins)
+    @assert isnothing(splits) == (parentgroupings isa (Vector{Vector{IntMonomialVector{Nr,Nc,I}}} where {Nr,Nc,I<:Integer}))
     if !ismissing(h) && !(h isa AbstractSet)
         h = Set(h)
     end
@@ -132,6 +164,15 @@ function _correlative_addedges!(g::Graphs.SimpleGraph, constrs,
         l = Set(l)
     end
     for (i, (constr, groupings)) in enumerate(zip(constrs, parentgroupings))
+        split = false
+        if !isnothing(splits)
+            if !ismissing(splits)
+                split = i ∈ splits
+            elseif !ismissing(joins)
+                split = !(i ∈ joins)
+            end
+        end
+
         low_deg = false
         if !ismissing(h)
             low_deg = !(i ∈ h)
@@ -139,7 +180,8 @@ function _correlative_addedges!(g::Graphs.SimpleGraph, constrs,
             low_deg = i ∈ l
         end
         if !low_deg && isone(length(groupings))
-            low_deg = isconstant(last(first(groupings)))
+            low_deg = isnothing(splits) ? isconstant(last(first(groupings))) :
+                                          all(∘(isconstant, last), first(groupings))
         end
         if low_deg
             # we must make sure that the grouping only contains the constant, else mixing will occur
@@ -149,6 +191,16 @@ function _correlative_addedges!(g::Graphs.SimpleGraph, constrs,
                 for (i, (var1, _)) in Iterators.drop(enumerate(mon), 1)
                     var1i = variable_index(var1)
                     for (var2, _) in Iterators.take(mon, i -1)
+                        Graphs.add_edge!(g, Graphs.Edge(var1i, variable_index(var2)))
+                    end
+                end
+            end
+        elseif split
+            for constr_col in eachcol(constr) # constr is Hermitian, so no need to also consider eachrow
+                vars = effective_variables(constr_col, rettype=Set, by=ordinary_variable)
+                @inbounds for (i, var1) in Iterators.drop(enumerate(vars), 1)
+                    var1i = variable_index(var1)
+                    for var2 in Iterators.take(vars, i -1)
                         Graphs.add_edge!(g, Graphs.Edge(var1i, variable_index(var2)))
                     end
                 end
@@ -189,6 +241,75 @@ function _correlative_gengroupings!(news::Vector{Vector{IntMonomialVector{Nr,Nc,
             # But low degree = prefactor is 1
             iszero(maxdeg) || error("Something is wrong with graph theory")
             push!(newel, IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)))
+        end
+    end
+end
+
+function _correlative_gengroupings!(news::Vector{Vector{AbstractVector{IntMonomialVector{Nr,Nc,I}}}}, cliques, constrs,
+    parentdeg, splits, joins) where {Nr,Nc,I<:Integer}
+    minmultideg = IntPolynomials.ConstantVector(0, Nr + 2Nc)
+    for (i, (constr, maxdeg, newel)) in enumerate(zip(constrs, parentdeg, news))
+        split = false
+        if !isnothing(splits)
+            if !ismissing(splits)
+                split = i ∈ splits
+            elseif !ismissing(joins)
+                split = !(i ∈ joins)
+            end
+        end
+
+        if split
+            newsub = FastVec{IntMonomialVector{Nr,Nc,I}}(buffer=size(constr, 2))
+            for constr_col in eachcol(constr)
+                constrvars = effective_variables(constr_col, rettype=Vector,
+                    by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{IntPolynomials.smallest_unsigned(Nr+2Nc)}
+                @assert(issorted(constrvars))
+                # There will be at least one clique that contains all the variables in the constraint; take the smallest one...
+                cliqueᵢ = findfirst(Base.Fix1(issubset_sorted, constrvars), cliques)
+                @inbounds if !isnothing(cliqueᵢ)
+                    clique = cliques[cliqueᵢ]
+                    maxmultideg = zeros(Int, Nr + 2Nc)
+                    fill!(@view(maxmultideg[clique]), maxdeg)
+                    unsafe_push!(newsub,
+                        IntMonomialVector{Nr,Nc}(
+                            ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
+                            minmultideg, maxmultideg)
+                        )
+                    )
+                else
+                    # ...unless the prefactor was of low order, as then we didn't necessarily introduce all the couplings.
+                    # But low degree = prefactor is 1
+                    iszero(maxdeg) || error("Something is wrong with graph theory")
+                    push!(newsub, IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)))
+                end
+            end
+            push!(newel, allequal(newsub) ? ConstantVector{IntMonomialVector{Nr,Nc,I}}(first(newsub), length(newsub)) :
+                                            finish!(newsub))
+        else
+            constrvars = effective_variables(constr, rettype=Vector,
+                by=∘(Base.Fix2(getproperty, :index), ordinary_variable))::Vector{IntPolynomials.smallest_unsigned(Nr+2Nc)}
+            @assert(issorted(constrvars))
+            # There will be at least one clique that contains all the variables in the constraint; take the smallest one...
+            cliqueᵢ = findfirst(Base.Fix1(issubset_sorted, constrvars), cliques)
+            @inbounds if !isnothing(cliqueᵢ)
+                clique = cliques[cliqueᵢ]
+                maxmultideg = zeros(Int, Nr + 2Nc)
+                fill!(@view(maxmultideg[clique]), maxdeg)
+                push!(newel,
+                    ConstantVector{IntMonomialVector{Nr,Nc,I}}(IntMonomialVector{Nr,Nc}(
+                        ExponentsMultideg{Nr+2Nc,I}(0, min(maxdeg, length(clique) * maxdeg),
+                        minmultideg, maxmultideg)
+                    ), size(constr, 2))
+                )
+            else
+                # ...unless the prefactor was of low order, as then we didn't necessarily introduce all the couplings.
+                # But low degree = prefactor is 1
+                iszero(maxdeg) || error("Something is wrong with graph theory")
+                push!(newel, ConstantVector{IntMonomialVector{Nr,Nc,I}}(
+                    IntMonomialVector{Nr,Nc}(ExponentsDegree{Nr+2Nc,I}(0, 0)),
+                    size(constr, 2)
+                ))
+            end
         end
     end
 end
