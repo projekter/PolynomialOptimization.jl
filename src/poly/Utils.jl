@@ -20,38 +20,82 @@ function _sortedallunique(v::AbstractVector)
     return true
 end
 
-struct ConstantVector{T} <: AbstractVector{T}
-    value::T
+mutable struct ConstantVector{T} <: AbstractVector{T}
     length::Int
+    value::T
+
+    ConstantVector{T}(value::T, length::Integer) where {T} = new{T}(length, value)
+    ConstantVector{T}(::UndefInitializer, length::Integer) where {T} = new{T}(length)
 end
+
+ConstantVector(value::T, length::Integer) where {T} = ConstantVector{T}(value, length)
 
 Base.IndexStyle(::Type{<:ConstantVector}) = IndexLinear()
 Base.size(cv::ConstantVector) = (cv.length,)
-@inline function Base.getindex(cv::ConstantVector, i)
+@inline function Base.getindex(cv::ConstantVector, i::Integer)
     @boundscheck checkbounds(cv, i)
     return cv.value
 end
+@inline function Base.getindex(cv::ConstantVector{T}, i::Union{<:AbstractRange,Colon,<:AbstractArray}) where {T}
+    @boundscheck checkbounds(cv, i)
+    return ConstantVector{T}(cv.value, length(i))
+end
 Base.iterate(cv::ConstantVector, rem=cv.length) = rem ≤ 0 ? nothing : (cv.value, rem -1)
-@inline function elementwise(f, a::ConstantVector, b::ConstantVector)
-    @assert(length(a) == length(b))
-    return ConstantVector(f(a.value, b.value), a.length)
+function Base._mapreduce(f, op, ::Base.IndexCartesian, a::ConstantVector)
+    T = eltype(a)
+    isempty(a) && return Base.mapreduce_empty(f, op, T)
+    return _mapreducerep(f, op, a.value, a.length)
 end
-@inline function elementwise(f, a::ConstantVector, b)
-    @assert(length(a) == length(b))
-    return f.((a.value,), b)
+Base._any(f, a::ConstantVector, ::Colon) = !isempty(a) && f(a.value)
+Base._all(f, a::ConstantVector, ::Colon) = isempty(a) || f(a.value)
+Base.map(f, a::ConstantVector) = ConstantVector(f(a.value), a.length)
+_mapreducerep(f, op::Union{typeof(Base.add_sum),typeof(+)}, v, num::Integer) = f(v) * num
+_mapreducerep(f, op::Union{typeof(Base.mul_prod),typeof(*)}, v, num::Integer) = f(v) ^ num
+_mapreducerep(f, op::Union{typeof(min),typeof(max)}, v, ::Integer) = f(v)
+_mapreducerep(f::Base.ExtremaMap, op::typeof(Base._extrema_rf), v, ::Integer) = f(v)
+function _mapreducerep(f, op, v, num::Integer)
+    val = f(v)
+    result = val
+    for i in 2:num
+        newval = op(result, v)
+        isequal(newval, result) && return result # fixed point
+        result = newval
+    end
+    return result
 end
-@inline function elementwise(f, a, b::ConstantVector)
-    @assert(length(a) == length(b))
-    return f.(a, (b.value,))
+Base.sort(a::ConstantVector; kwargs...) = a
+Base.sort!(a::ConstantVector; kwargs...) = a
+Base.BroadcastStyle(::Type{<:ConstantVector}) = Broadcast.ArrayStyle{ConstantVector}()
+Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConstantVector}}, ::Type{T}) where {T} =
+    ConstantVector{T}(undef, length(bc))
+@inline function Base.copyto!(dest::ConstantVector, bc::Broadcast.Broadcasted{Nothing})
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    if bc.f === identity && bc.args isa Tuple{ConstantVector}
+        A = bc.args[1]
+        if axes(dest) == axes(A)
+            dest.value = A.value
+            return dest
+        end
+    end
+    bc′ = Broadcast.preprocess(dest, bc)
+    dest.value = first(bc′)
+    return dest
 end
-Base.@propagate_inbounds elementwise(f, a, b) = f.(a, b)
-function elementwise!(::ConstantVector, f, a, b)
-    @assert(length(into) == length(a))
-    return elementwise(f, a, b)
+# we have to undo the "performance" optimization
+@inline function Base.copyto!(dest::ConstantVector, bc::Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{0}})
+    if bc.f === identity && bc.args isa Tuple{Any} && Broadcast.isflat(bc)
+        dest.value = bc.args[1][]
+        return dest
+    else
+        return copyto!(dest, convert(Broadcast.Broadcasted{Nothing}, bc))
+    end
 end
-Base.@propagate_inbounds elementwise!(into::AbstractVector, f, a::ConstantVector, b) = into .= f.((a.value,), b)
-Base.@propagate_inbounds elementwise!(into::AbstractVector, f, a, b::ConstantVector) = into .= f.(a, (b.value,))
-Base.@propagate_inbounds elementwise!(into::AbstractVector, f, a, b) = into .= f.(a, b)
+# ConstantVector style loses to any but scalars
+Base.BroadcastStyle(::Broadcast.ArrayStyle{ConstantVector}, ::Broadcast.AbstractArrayStyle{0}) =
+    Broadcast.ArrayStyle{ConstantVector}()
+Base.BroadcastStyle(::Broadcast.ArrayStyle{ConstantVector}, ::Broadcast.DefaultArrayStyle{0}) =
+    Broadcast.ArrayStyle{ConstantVector}()
+Base.BroadcastStyle(::Broadcast.ArrayStyle{ConstantVector}, a::Broadcast.DefaultArrayStyle) = a
 
 function intersect_sorted(a, b)
     result = FastVec{promote_type(eltype(a), eltype(b))}(buffer=min(length(a), length(b)))
