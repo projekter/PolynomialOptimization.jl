@@ -270,84 +270,94 @@ _extend_graphs!(::Val{TERM_MODE_CHORDAL_CLIQUES}, g::Graphs.SimpleGraph, alg::Cl
     chordal_cliques!(g; alg)
 
 function _extend_graphs!(::Val{TERM_MODE_DENSE}, g::Graphs.SimpleGraph{T}, ::CliqueTrees.EliminationAlgorithm) where {T<:Integer}
-    # Make the graph into a complete one. As we know that every modification will always be towards more compelte graphs, we
+    # Make the graph into a complete one. As we know that every modification will always be towards more complete graphs, we
     # can share the memory for every entry in the adjacency list.
     edges = collect(one(T):T(Graphs.ne(g)))
     fill!(g.fadjlist, edges)
     return [edges]
 end
 
-@eval function _extend_graphs!(previous::RelaxationGroupings{Nr,Nc,I}, parent::RelaxationGroupings{Nr,Nc,I}, g::Vector{G},
+function _extend_graphs!(
+    newgroup::AbstractVector{IntMonomialVector{Nr,Nc,I}}, method::TermMode, obj::Bool, g::Graphs.SimpleGraph,
+    varclique_methods::VarcliqueMethods, grouping::IntMonomialVector{Nr,Nc,I},
+    chordal_completion::CliqueTrees.EliminationAlgorithm, parent_varcliques) where {Nr,Nc,I<:Integer}
+    if !ismissing(varclique_methods)
+        vcm = varclique_methods[_findclique(grouping, parent_varcliques)]
+        if ismissing(vcm)
+            method == TERM_MODE_NONE && return false
+        else
+            method = vcm
+        end
+    end
+    method == TERM_MODE_NONE && return true
+    cliques = _extend_graphs!(Val(method), g, chordal_completion)
+    for clique in cliques
+        (obj && isone(length(clique)) && isconstant(grouping[first(clique)])) && continue
+        push!(newgroup, @view(grouping[clique]))
+    end
+    return true
+end
+
+function _extend_graphs!(method::TermMode, igroup::Integer, constr_groupings::AbstractVector{IntMonomialVector{Nr,Nc,I}},
+    previous, obj::Bool, g::Vector{G} where {G<:Graphs.SimpleGraph}, varclique_methods::VarcliqueMethods,
+    chordal_completion::CliqueTrees.EliminationAlgorithm, parent_varcliques) where {Nr,Nc,I<:Integer}
+    if method != TERM_MODE_NONE
+        newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
+        for grouping in constr_groupings
+            _extend_graphs!(newgroup, method, obj, g[igroup], varclique_methods, grouping, chordal_completion,
+                parent_varcliques)
+            igroup += 1
+        end
+        return finish!(newgroup), igroup
+    elseif ismissing(varclique_methods)
+        igroup += length(constr_groupings)
+        return previous, igroup
+    else
+        newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
+        missingclique = false
+        nonmissingclique = false
+        for grouping in constr_groupings
+            thismissing = _extend_graphs!(newgroup, method, obj, g[igroup], varclique_methods, grouping, chordal_completion,
+                parent_varcliques)
+            missingclique |= !thismissing
+            nonmissingclique |= thismissing
+            igroup += 1
+        end
+        if missingclique
+            # This is an implementation limitation: as we do not know which method was applied in the previous step, we
+            # cannot reconstruct the cliques from the graph alone
+            nonmissingclique &&
+                throw(ArgumentError("Partially missing clique methods cannot be mixed with no known objective method"))
+            return previous, igroup
+        else
+            return finish!(newgroup), igroup
+        end
+    end
+end
+
+function _extend_graphs!(previous::RelaxationGroupings{Nr,Nc,I}, parent::RelaxationGroupings{Nr,Nc,I}, g::Vector{G},
     methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods,
     chordal_completion::CliqueTrees.EliminationAlgorithm) where {Nr,Nc,I<:Integer,G<:Graphs.SimpleGraph}
     # better enable bounds checking in this method
-    ipoly = 1
     igroup = 1
-    $((let
-        body = quote
-            $(name === :obj ? :newobj : :($(Symbol(:new, name))[i])) = if methods[ipoly] != TERM_MODE_NONE
-                newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
-                for grouping in constr_groupings
-                    # while grouping is generic, we don't gain a lot on inference by putting the loop body in a function
-                    # barrier
-                    if !ismissing(varclique_methods)
-                        vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
-                        method = ismissing(vcm) ? methods[ipoly] : vcm
-                    else
-                        method = methods[ipoly]
-                    end
-                    cliques = _extend_graphs!(Val(method), g[igroup], chordal_completion)
-                    for clique in cliques
-                        ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
-                            push!(newgroup, @view(grouping[clique]))
-                    end
-                    igroup += 1
-                end
-                finish!(newgroup)
-            elseif ismissing(varclique_methods)
-                igroup += length(constr_groupings)
-                $(name === :obj ? :(previous.obj) : :(previous.$name[i]))
-            else
-                newgroup = FastVec{IntMonomialVector{Nr,Nc,I}}()
-                missingclique = false
-                nonmissingclique = false
-                for grouping in constr_groupings
-                    vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
-                    missingclique |= ismissing(vcm)
-                    nonmissingclique |= !ismissing(vcm)
-                    if !ismissing(vcm)
-                        cliques = _extend_graphs!(Val(vcm), g[igroup], chordal_completion)
-                        for clique in cliques
-                            ($(name === :obj) && isone(length(clique)) && isconstant(grouping[first(clique)])) ||
-                                push!(newgroup, @view(grouping[clique]))
-                        end
-                    end
-                    igroup += 1
-                end
-                if missingclique
-                    # This is an implementation limitation: as we do not know which method was applied in the previous step, we
-                    # cannot reconstruct the cliques from the graph alone
-                    nonmissingclique &&
-                        throw(ArgumentError("Partially missing clique methods cannot be mixed with no known objective method"))
-                    $(name === :obj ? :(previous.obj) : :(previous.$name[i]))
-                else
-                    finish!(newgroup)
-                end
-            end
-            ipoly += 1
-        end
-        if name === :obj
-            Expr(:block,
-                :(constr_groupings = parent.obj),
-                body
-            )
-        else
-            Expr(:block,
-                Expr(:(=), Symbol(:new, name),:(Vector{Vector{IntMonomialVector{Nr,Nc,I}}}(undef, length(parent.$name)))),
-                :(for (i, constr_groupings) in enumerate(parent.$name); $body end)
-            )
-        end
-    end for name in (:obj, :zeros, :nonnegs, :psds))...)
+    newobj, igroup = _extend_graphs!(methods[1], igroup, parent.obj, previous.obj, true, g, varclique_methods,
+                                     chordal_completion, parent.var_cliques)
+    ipoly = 1
+    newzeros = Vector{Vector{IntMonomialVector{Nr,Nc,I}}}(undef, length(parent.zeros))
+    for (i, constr_groupings) in enumerate(parent.zeros)
+        newzeros[i], igroup = _extend_graphs!(methods[ipoly+=1], igroup, constr_groupings, previous.zeros[i], false, g,
+                                              varclique_methods, chordal_completion, parent.var_cliques)
+    end
+    newnonnegs = Vector{Vector{IntMonomialVector{Nr,Nc,I}}}(undef, length(parent.nonnegs))
+    for (i, constr_groupings) in enumerate(parent.nonnegs)
+        newnonnegs[i], igroup = _extend_graphs!(methods[ipoly+=1], igroup, constr_groupings, previous.nonnegs[i], false, g,
+                                                varclique_methods, chordal_completion, parent.var_cliques)
+    end
+    newpsds = Vector{Vector{IntMonomialVector{Nr,Nc,I}}}(undef, length(parent.psds))
+    for (i, constr_groupings) in enumerate(parent.psds)
+        newpsds[i], igroup = _extend_graphs!(methods[ipoly+=1], igroup, constr_groupings, previous.psds[i], false, g,
+                                             varclique_methods, chordal_completion, parent.var_cliques)
+    end
 
     return RelaxationGroupings(newobj, newzeros, newnonnegs, newpsds, previous.var_cliques)
 end

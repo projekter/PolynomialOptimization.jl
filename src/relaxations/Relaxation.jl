@@ -106,14 +106,17 @@ function Base.show(io::IO, m::MIME"text/plain", groupings::RelaxationGroupings{N
     end
     print(io, "\nBlock groupings\n===============\nObjective: ")
     _show_groupings(io, groupings.obj, groupings.var_cliques)
-    for (name, f) in (("Equality", :zeros), ("Nonnegative", :nonnegs), ("Semidefinite", :psds))
-        block = getproperty(groupings, f)::Vector{Vector{IntMonomialVector{Nr,Nc,I}}}
-        if !isempty(block)
-            for (i, constr) in enumerate(block)
-                print(io, "\n", name, " constraint #", i, ": ")
-                _show_groupings(io, constr, groupings.var_cliques)
-            end
-        end
+    for (i, constr) in enumerate(groupings.zeros)
+        print(io, "\nEquality constraint #", i, ": ")
+        _show_groupings(io, constr, groupings.var_cliques)
+    end
+    for (i, constr) in enumerate(groupings.nonnegs)
+        print(io, "\nNonnegative constraint #", i, ": ")
+        _show_groupings(io, constr, groupings.var_cliques)
+    end
+    for (i, constr) in enumerate(groupings.psds)
+        print(io, "\nSemidefinite constraint #", i, ": ")
+        _show_groupings(io, constr, groupings.var_cliques)
     end
 end
 
