@@ -242,7 +242,7 @@ function _extend_graphs!(::Val{TERM_MODE_BLOCK}, g::Graphs.SimpleGraph, ::Clique
             end
         end
         # the edges are bidirectional, but count only once
-        ne += (length(cc) * (length(cc) +1)) >> 1
+        ne += trisize(length(cc))
     end
     g.ne = ne
     return connections
@@ -260,7 +260,7 @@ function _extend_graphs!(::Val{TERM_MODE_CLIQUES}, g::Graphs.SimpleGraph{Int}, :
     ne = 0
     @inbounds for (i, edges) in enumerate(edge_sets)
         g.fadjlist[i] = sort!(collect(edges))
-        ne += (length(edges) * (length(edges) +1)) >> 1
+        ne += trisize(length(edges))
     end
     g.ne = ne
     return cliques

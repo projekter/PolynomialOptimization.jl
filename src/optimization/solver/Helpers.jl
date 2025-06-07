@@ -8,13 +8,6 @@ Short helper function that allows to determine the number of monomials in `n` va
 """
 monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
 
-"""
-    trisize(n)
-
-Returns the number of items in the triangle of a matrix of side dimension `n`, ``\\frac{n(n +1)}{2}``.
-"""
-trisize(n) = (n * (n +1)) >> 1
-
 macro twice(symb::Symbol, condition, body)
     esc(quote
         let $symb=false
