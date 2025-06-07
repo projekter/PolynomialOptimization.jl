@@ -182,8 +182,7 @@ end
 function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_union::AbstractSet{I},
     localizing_supports::Vector{MV}, parent::RelaxationGroupings, methods::AbstractVector{TermMode},
     varclique_methods::Union{Missing,<:AbstractVector{Union{TermMode,Missing}}}) where {I<:Integer,MV<:IntMonomialVector}
-    # enforce specialization on grouping, which is an abstract type
-    c = Channel{Tuple{Any,MV,Int,Int}}(0, spawn=true) do ch
+    c = Channel{Tuple{Any,MV,TermMode,Int}}(0, spawn=true) do ch
         ipoly = 1
         igroup = 1
         @unroll for constrs in ((parent.obj,), parent.zeros, parent.nonnegs, parent.psds)
@@ -191,7 +190,7 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
                 if methods[ipoly] != TERM_MODE_NONE || !ismissing(varclique_methods)
                     localizing_support = localizing_supports[ipoly]
                     for grouping in constr_groupings
-                        put!(ch, (grouping, localizing_support, ipoly, igroup))
+                        put!(ch, (grouping, localizing_support, methods[ipoly], igroup))
                         igroup += 1
                     end
                 else
@@ -202,8 +201,8 @@ function _supports_to_graphs!(graphs::Vector{Graphs.SimpleGraph{Int}}, support_u
         end
     end
     Threads.threading_run(_ -> begin
-        for (grouping, localizing_support, ipoly, igroup) in c
-            if methods[ipoly] == TERM_MODE_NONE
+        for (grouping, localizing_support, method, igroup) in c
+            if method == TERM_MODE_NONE
                 vcm = varclique_methods[_findclique(grouping, parent.var_cliques)]
                 if ismissing(vcm) || vcm == TERM_MODE_NONE
                     return
