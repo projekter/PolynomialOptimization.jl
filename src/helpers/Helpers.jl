@@ -14,7 +14,7 @@ using .IntPolynomials, .IntPolynomials.MultivariateExponents
 using .IntPolynomials: IntMonomialOrConj
 import .IntPolynomials.MultivariateExponents: iterate! # be careful to avoid duplication of methods; let's reuse this one
 
-include("./MatrixPolynomials.jl")
+include("./ArrayPolynomials.jl")
 
 """
     issubset_sorted(a, b)
