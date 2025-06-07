@@ -531,11 +531,11 @@ function iterate!(relaxation::SparsityTerm; method::Union{TermMode,<:AbstractVec
     varclique_methods::VarcliqueMethods=missing,
     chordal_completion::CliqueTrees.EliminationAlgorithm=relaxation.chordal_completion)
     problem = poly_problem(relaxation)
-    _iterate_supports!(relaxation)
     # Even if new_supports is the same as ts.support_union, we might run into the unlikely scenario that the user changed the
     # type of term sparsity, so that now extending with a different type might lead to a different result despite having the
     # same support.
     methods = _jointmethods(problem, objective, zero, nonneg, psd, method)
+    _iterate_supports!(relaxation)
     _supports_to_graphs!(relaxation, methods, varclique_methods)
     return _extend_graphs!(relaxation, methods, varclique_methods, chordal_completion)
 end
