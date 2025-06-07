@@ -1,7 +1,7 @@
 module Relaxation
 
 using ..IntPolynomials, .IntPolynomials.MultivariateExponents, ..PolynomialOptimization, MultivariatePolynomials,
-    ..PolynomialOptimization.FastVector, SortingAlgorithms
+    ..PolynomialOptimization.FastVector
 import StatsBase, Graphs, CliqueTrees
 using ..PolynomialOptimization: @assert, @capture, @inbounds, Problem, @unroll, @verbose_info, issubset_sorted, sizehint_!,
     union_!
@@ -138,32 +138,33 @@ function embed!(to::AbstractVector{X}, new::X, olds::AbstractVector{X}) where {X
     return false
 end
 
-function embed(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where {X}
-    complete = Threads.Atomic{Bool}(true)
-    nos = Threads.nthreads()
-    batch = div(length(news), nos, RoundUp)
-    tos = [FastVec{X}(buffer=batch) for _ in 1:nos]
-    @inbounds Threads.@threads for i in 1:nos
-        items = @view(news[(i-1)*batch+1:min(i*batch, length(news))])
-        completeᵢ = true
-        toᵢ = tos[i]
-        for new in items
-            completeᵢ &= embed!(toᵢ, new, olds)
+function embed!(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::Bool) where {X}
+    news === olds && return news
+    if X <: Vector{<:IntVariable}
+        complete = true
+        to = FastVec{X}(buffer=length(news))
+        for new in news
+            complete &= embed!(to, new, olds)
         end
-        Threads.atomic_and!(complete, completeᵢ)
-        if X <: AbstractVector
-            for toᵢᵢ in toᵢ
-                sort!(toᵢᵢ)
+        for toᵢ in to
+            sort!(toᵢ)
+        end
+        result = Base._groupedunique!(sort!(finish!(to), by=_lensort))
+        news_is_clean && complete && return result
+    else
+        if PolynomialOptimization.debugging
+            nos = Threads.nthreads()
+            batch = div(length(news), nos, RoundUp)
+            @inbounds Threads.@threads for i in 1:nos
+                items = @view(news[(i-1)*batch+1:min(i*batch, length(news))])
+                for new in items
+                    any(Base.Fix1(⊆, new), olds) || throw(AssertionError("Relaxation led to an enlarged grouping"))
+                end
             end
         end
-        sort!(toᵢ, by=_lensort)
+        result = Base._groupedunique!(sort!(convert(Vector, news), by=_lensort))
+        news_is_clean && return result
     end
-    to = sizehint!(X[], sum(length, tos, init=0))
-    for toᵢ in tos
-        append!(to, toᵢ)
-    end
-    result = Base._groupedunique!(sort!(to, by=_lensort, alg=TimSort)) # use TimSort as the subslices are already presorted
-    news_is_clean && complete[] && return result
     # it is not guaranteed that news is completely subset-free, as it might have been constructed from different sources
     deletes = fill(false, length(result))
     @inbounds Threads.@threads for i in 2:length(result)
@@ -178,18 +179,18 @@ function embed(news::AbstractVector{X}, olds::AbstractVector{X}, news_is_clean::
     return result
 end
 
-function embed(new::RG, old::RG, new_is_clean::Bool) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
+function embed!(new::RG, old::RG, new_is_clean::Bool) where {Nr,Nc,I<:Integer,RG<:RelaxationGroupings{Nr,Nc,I}}
     (length(new.zeros) == length(old.zeros) && length(new.nonnegs) == length(old.nonnegs) &&
         length(new.psds) == length(old.psds)) ||
         throw(ArgumentError("Cannot embed two relaxation groupings for different optimization problems"))
-    newobj = embed(new.obj, old.obj, new_is_clean)
-    newzeros = embed.(new.zeros, old.zeros, new_is_clean)
-    newnonnegs = embed.(new.nonnegs, old.nonnegs, new_is_clean)
-    newpsds = embed.(new.psds, old.psds, new_is_clean)
-    newcliques = embed(new.var_cliques, old.var_cliques, new_is_clean)
+    newobj = new.obj === old.obj ? new.obj : embed!(new.obj, old.obj, new_is_clean)
+    newzeros = new.zeros === old.zeros ? new.zeros : embed!.(new.zeros, old.zeros, new_is_clean)
+    newnonnegs = new.nonnegs === old.nonnegs ? new.nonnegs : embed!.(new.nonnegs, old.nonnegs, new_is_clean)
+    newpsds = new.psds === old.psds ? new.psds : embed!.(new.psds, old.psds, new_is_clean)
+    newcliques = new.var_cliques === old.var_cliques ? new.var_cliques : embed!(new.var_cliques, old.var_cliques, new_is_clean)
     return RG(newobj, newzeros, newnonnegs, newpsds, newcliques)
 end
-embed(new::RelaxationGroupings, ::Nothing, ::Bool) = new
+embed!(new::RelaxationGroupings, ::Nothing, ::Bool) = new
 
 Base.:(==)(g₁::G, g₂::G) where {G<:RelaxationGroupings} = g₁.obj == g₂.obj && g₁.zeros == g₂.zeros &&
     g₁.nonnegs == g₂.nonnegs && g₁.psds == g₂.psds && g₁.var_cliques == g₂.var_cliques

@@ -82,7 +82,7 @@ mutable struct SparsityTerm{
         end
         @verbose_info("Generated new groupings in ", grouptime, " seconds; embedding with old.")
         intersecttime = @elapsed begin
-            gr = embed(newgroupings, parent, relaxation isa AbstractRelaxationBasis)
+            gr = embed!(newgroupings, parent, relaxation isa AbstractRelaxationBasis)
         end
         @verbose_info("Obtained embedding in ", intersecttime, " seconds")
 
@@ -354,7 +354,7 @@ end
 
 function _extend_graphs!(relaxation::SparsityTerm, methods::AbstractVector{TermMode}, varclique_methods::VarcliqueMethods,
     chordal_completion::CliqueTrees.EliminationAlgorithm)
-    newgroupings = embed(_extend_graphs!(groupings(relaxation), relaxation.parentgroupings, relaxation.graphs, methods,
+    newgroupings = embed!(_extend_graphs!(groupings(relaxation), relaxation.parentgroupings, relaxation.graphs, methods,
         varclique_methods, chordal_completion), relaxation.parentgroupings, relaxation.parent isa AbstractRelaxationBasis)
     if newgroupings != relaxation.groupings
         relaxation.groupings = newgroupings

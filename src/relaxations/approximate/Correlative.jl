@@ -175,7 +175,7 @@ struct SparsityCorrelative{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxat
             end
         end
         @verbose_info("Generated new groupings; embedding in old.")
-        gentime = @elapsed(gr = embed(
+        gentime = @elapsed(gr = embed!(
             RelaxationGroupings(newobj, newzero, newnonneg, newpsd, map.(IntVariable{Nr,Nc}, cliques)),
             parent,
             relaxation isa AbstractRelaxationBasis
