@@ -6,9 +6,13 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     # first form the clique graph; this time, we work with the adjacency matrix
     n = length(cliques)
     n ≤ 1 && return [smallcliques; cliques]
-    @inbounds adjmOwn = collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
-                                                 length(cliques[i] ∪ cliques[j])^3 : 0
-                                         for i in 1:n, j in 1:n))::Matrix{Int} # capture n?
+    adjmOwn = Matrix{Int}(undef, n, n)
+    @inbounds for j in 1:n
+        fill!(@view(adjmOwn[1:j, j]), 0)
+        for i in j+1:n
+            adjmOwn[i, j] = length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3
+        end
+    end
     idxOwn = fill(true, n)
     GC.@preserve adjmOwn idxOwn begin
         adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
@@ -16,9 +20,7 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
         deleted = 0
         @inbounds while true
             # select two permissible cliques with the highest weight
-            w, maxidx = findmax(adjm)
-            i = maxidx[1]
-            j = maxidx[2]
+            w, (i, j) = findmax(adjm)
             # while clique graph contains positive weights
             w ≤ 0 && break
             # merge cliques
@@ -44,12 +46,15 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
                 n -= deleted
                 # we already have enough space allocated at adjm; we will now simply overwrite it.
                 adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
-                adjm .= collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
-                                                 length(cliques[i] ∪ cliques[j])^3 : 0
-                                         for i in 1:n, j in 1:n))
+                @inbounds for j in 1:n
+                    fill!(@view(adjm[1:j, j]), 0)
+                    for i in j+1:n
+                        adjm[i, j] = length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3
+                    end
+                end
                 # same for idx
                 idx = unsafe_wrap(Array, pointer(idxOwn), n, own=false)
-                idx .= true
+                fill!(idx, true)
                 deleted = 0
             else
                 # update clique graph
