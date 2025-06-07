@@ -280,3 +280,36 @@ Nonnegative constraint #1: 1 block
 Nonnegative constraint #2: 1 block
   1 [1]"
 end
+
+@testset "PSD constraints" begin
+    DynamicPolynomials.@polyvar x[1:2]
+    prob = poly_problem(zero(polynomial_type(x[1])), psd=[[1-x[1]^2 0; 0 1-x[2]^2]])
+    @test strRep(groupings(Relaxation.SparsityCorrelative(prob, 2, split_psd=false))) ==
+        "Groupings for the relaxation of a polynomial optimization problem
+Variable cliques
+================
+[x₁, x₂]
+
+Block groupings
+===============
+Objective: 1 block
+  6 [1, x₂, x₁, x₂², x₁x₂, x₁²]
+Semidefinite constraint #1: 1 block
+  - 2 indices: 3 [1, x₂, x₁]"
+
+    @test strRep(groupings(Relaxation.SparsityCorrelative(prob, 2, split_psd=true))) ==
+        "Groupings for the relaxation of a polynomial optimization problem
+Variable cliques
+================
+[x₁]
+[x₂]
+
+Block groupings
+===============
+Objective: 2 blocks
+  3 [1, x₂, x₂²]
+  3 [1, x₁, x₁²]
+Semidefinite constraint #1: 1 block
+  - index 1: 2 [1, x₁]
+    index 2: 2 [1, x₂]"
+end

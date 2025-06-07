@@ -60,7 +60,7 @@ end
 @testset "Example 4.5 from Zhen, Fantuzzi, Papachristodoulou review" begin
     DynamicPolynomials.@polyvar x[1:3]
     sp = Relaxation.SparsityTermChordal(poly_problem(1 + x[1]^4 + x[2]^4 + x[3]^4 + x[1]^2 * x[2]^2 + x[1]^2 * x[3]^2 +
-                                                    x[2]^2 * x[3]^2 + x[2] * x[3]), 2)
+                                                     x[2]^2 * x[3]^2 + x[2] * x[3]), 2)
     @test strRep(sp) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
@@ -89,16 +89,23 @@ Objective: 6 blocks
   2 [x₃, x₁x₂]
   2 [x₂, x₁x₃]
   2 [x₁, x₂x₃]
-Semidefinite constraint #1: 2 blocks
-  3 [1, x₂, x₁]
-  3 [x₃, x₂, x₁]"
+Semidefinite constraint #1: 5 blocks
+  - index 1: 1 [1]
+    index 2: 2 [x₃, x₂]
+  - index 1: 2 [1, x₁]
+    index 2: 1 [x₃]
+  - index 1: 2 [x₃, x₂]
+    index 2: 1 [x₁]
+  - index 1: 1 [x₂]
+    index 2: 2 [1, x₁]
+  - 2 indices: 1 [1]"
     @test poly_optimize(:Clarabel, sp).objective ≈ 0.5355788 atol = 1e-7
 
     @test strRep(iterate!(sp)) == "Relaxation.SparsityTerm of a polynomial optimization problem
 Variable cliques:
   x[1], x[2], x[3]
 PSD block sizes:
-  [6 => 2, 5 => 2, 4 => 2, 3 => 2]"
+  [4 => 3, 3 => 3, 2 => 3]"
 
     @test isnothing(iterate!(sp))
 end
