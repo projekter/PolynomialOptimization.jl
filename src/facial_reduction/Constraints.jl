@@ -335,6 +335,7 @@ function Relaxation.embed!(data::FacialReductionData{<:Real,NrPlusNy}, old::Rela
         @inbounds for (i, grouping) in enumerate(data.M_obj)
             obj[i] = _change_var_numbers(grouping, Val(Nr))
         end
+        filter!(!isempty, obj)
 
         nonneg = Vector{Vector{IntMonomialVector{Nr,0,I}}}(undef, length(data.M_nonneg))
         @inbounds for (i, groupings) in enumerate(data.M_nonneg)
@@ -342,6 +343,7 @@ function Relaxation.embed!(data::FacialReductionData{<:Real,NrPlusNy}, old::Rela
             for (j, grouping) in enumerate(groupings)
                 nonnegᵢ[j] = _change_var_numbers(grouping, Val(Nr))
             end
+            filter!(!isempty, nonnegᵢ)
         end
 
         psds = Vector{Vector{AbstractVector{IntMonomialVector{Nr,0,I}}}}(undef, length(data.M_psd))
@@ -349,7 +351,8 @@ function Relaxation.embed!(data::FacialReductionData{<:Real,NrPlusNy}, old::Rela
             psds[i] = psdᵢ = Vector{AbstractVector{IntMonomialVector{Nr,0,I}}}(undef, length(groupings))
             dim = length(first(old.psds[i]))
             for (j, grouping) in enumerate(groupings)
-                psdᵢ[j] = psdᵢⱼ = _change_var_numbers.((grouping,), Val(Nr), UnsafeIsSetAt.(NrPlusNy:-1:NrPlusNy-dim+1))
+                psdᵢ[j] = psdᵢⱼ = filter!(!isempty, _change_var_numbers.((grouping,), Val(Nr),
+                                                                         UnsafeIsSetAt.(NrPlusNy:-1:NrPlusNy-dim+1)))
                 if allequal(psdᵢⱼ)
                     psdᵢ[j] = ConstantVector{IntMonomialVector{Nr,0,I}}(first(psdᵢⱼ), dim)
                 end

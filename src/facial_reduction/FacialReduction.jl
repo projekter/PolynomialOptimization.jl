@@ -131,7 +131,6 @@ function _truncate(M::IntMonomialVector{Nr,0}, M⁺::IntMonomialVector{Nr,0}, λ
     end
     changed || return M
     result = M[keeps]
-    isempty(result) && error("The relaxation of the polynomial optimization problem is unbounded.")
     return result
 end
 
