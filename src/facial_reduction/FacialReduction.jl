@@ -179,15 +179,12 @@ end
 
 function facial_reduction! end
 
-function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, kwargs...)
-    i = 0
+function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, maxiter::Integer=0, kwargs...)
+    i = 1
     @verbose_info("Starting facial reduction")
     try
         while true
-            if verbose
-                println("Iteration #", i += 1)
-                flush(stdout)
-            end
+            @verbose_info("Iteration #", i)
             upd_time = @elapsed begin
                 updateM⁺!(data; verbose)
                 updateM²!(data; verbose)
@@ -204,6 +201,10 @@ function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Boo
                     flush(stdout)
                 end
             end
+            if (i += 1) == maxiter
+                @verbose_info("Terminating due to maximum number of iterations")
+                return data
+            end
         end
     catch e
         if e isa InterruptException
@@ -215,10 +216,12 @@ function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Boo
 end
 
 @doc raw"""
-    facial_reduction!(method, relaxation::AbstractRelaxation; verbose=false, parameters...)
+    facial_reduction!(method, relaxation::AbstractRelaxation; verbose=false, [maxiter], parameters...)
 
 Performs facial reduction on a sums-of-squares problem.
-The algorithm follows [Permenter, Parillo (2014)](https://doi.org/10.1109/CDC.2014.7040427).
+The algorithm follows [Permenter, Parillo (2014)](https://doi.org/10.1109/CDC.2014.7040427); it is iterative and will terminate
+if no further reduction could be found in one iteration or if `maxiter` was reached. Cancelling the algorithm will return the
+data from the last complete iteration.
 """
 facial_reduction(@nospecialize(method::Val), relaxation::AbstractRelaxation; verbose::Bool=false, kwargs...) =
     # Relaxation.embed(
