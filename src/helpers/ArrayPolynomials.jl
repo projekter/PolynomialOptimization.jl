@@ -5,7 +5,7 @@ for f in (:variables, :effective_variables)
         for x in a
             union_!(result, $f(x))
         end
-        return sort!(collect(result))
+        return sort!(collect(result), rev=true)
     end
 end
 
@@ -18,7 +18,7 @@ function MultivariatePolynomials.effective_variables(a::AbstractArray{<:IntPolyn
     for x in rest
         union_!(result, effective_variables(x; rettype=Set, by))
     end
-    V <: Vector && return sort!(collect(result))
+    V <: Vector && return sort!(collect(result), rev=true)
     return result
 end
 
