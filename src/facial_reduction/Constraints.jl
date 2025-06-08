@@ -101,7 +101,7 @@ function FacialReductionData{C,NrPlusNy,I}(relaxation::AbstractRelaxation{<:Prob
         prefactor = _change_var_numbers(prob.prefactor, Val(NrPlusNy))
         M_obj = _change_var_numbers.(g.obj, Val(NrPlusNy))
         M⁺_obj = similar(M_obj)
-        M²_obj = Vector{MV}(undef, length(g.obj) -1)
+        M²_obj = similar(M_obj)
     end
     @verbose_info("├ objective and prefactor (", conv_time, " seconds)")
 
@@ -274,8 +274,8 @@ _sumlen(x) = intsum(length, x)
 
 function Base.getproperty(data::FacialReductionData, field::Symbol)
     field === :numM⁺ && return _sumlen(data.M⁺_obj) + intsum(_sumlen, data.M⁺_nonneg) + intsum(_sumlen, data.M⁺_psd)
-    field === :numSOS && return 1 + _sumlen(data.M²_nonneg) + _sumlen(data.M²_psd)
-    field === :numMons && return (iszero(data.prefactor) ? 1 : 2) + _sumlen(data.M²_obj) +
+    field === :numSOS && return length(data.M²_obj) + _sumlen(data.M²_nonneg) + _sumlen(data.M²_psd)
+    field === :numMons && return (iszero(data.prefactor) ? 1 : 2) + _sumlen(Iterators.drop(data.M²_obj, 1)) +
         _sumlen(data.M²_zero) + intsum(_sumlen, data.M²_nonneg) + intsum(_sumlen, data.M²_psd)
     return getfield(data, field)
 end
@@ -285,14 +285,13 @@ function updateM²!(data::FacialReductionData{<:Any,NrPlusNy,I}; verbose::Bool=f
     E = ExponentsAll{NrPlusNy,I}()
 
     conv_time = @elapsed begin
-        @inbounds for (j, groupingⱼ) in enumerate(Iterators.drop(data.M_obj, 1))
+        @inbounds for (j, groupingⱼ) in enumerate(data.M_obj)
             data.M²_obj[j] = IntMonomialVector{NrPlusNy,0}(
                 IntPolynomials.unsafe, E, sort!(convert.(I, unique_outer_groupings(groupingⱼ, e=E)[1]))
             )
         end
-        # we don't assign the first one
     end
-    length(data.M_obj) > 1 && @verbose_info("├ objective (", conv_time, " seconds)")
+    @verbose_info("├ objective (", conv_time, " seconds)")
 
     conv_time = @elapsed begin
         @inbounds for (i, groupings) in enumerate(data.M_nonneg)
@@ -364,7 +363,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
     if pos === :obj
         @assert(isone(idxouter))
         if idxinner ≤ length(data.M_obj)
-            mons = @inbounds data.M²_obj[idxinner-1]
+            mons = @inbounds data.M²_obj[idxinner]
             @inbounds return FacialReductionDataSliceRest{false,C}(data.M_obj[idxinner], data.M⁺_obj[idxinner], mons, k),
                              (:obj, 1, idxinner +1, k + length(mons))
         end
@@ -416,15 +415,15 @@ Base.eltype(::Type{<:AbstractFacialReductionDataSlice{P}}) where {P<:IntPolynomi
 
 struct FacialReductionDataSliceFirst{P<:IntPolynomial,D<:FacialReductionData} <: AbstractFacialReductionDataSlice{P}
     data::D
-    extdegM::Tuple{Int,Int}
 
     FacialReductionDataSliceFirst(data::D) where {C<:Real,NrPlusNy,I<:Integer,MV<:IntMonomialVector{NrPlusNy,0,I},D<:FacialReductionData{C,NrPlusNy,I,MV}} =
-        new{IntPolynomial{C,NrPlusNy,0,MV},D}(data, extdegree(data.M_obj[1]))
+        new{IntPolynomial{C,NrPlusNy,0,MV},D}(data)
 end
 
 function Base.getproperty(frs::FacialReductionDataSliceFirst, field::Symbol)
     field === :M && @inbounds return frs.data.M_obj[1]
     field === :M⁺ && @inbounds return frs.data.M⁺_obj[1]
+    field === :M² && @inbounds return frs.data.M²_obj[1]
     return getfield(frs, field)
 end
 
@@ -433,7 +432,7 @@ Base.length(frs::FacialReductionDataSliceFirst) = frs.data.numM⁺
 @generated _cached_onepolynomial(::FacialReductionDataSliceFirst{<:IntPolynomial{C,NrPlusNy}}, m::IntMonomial{NrPlusNy,0}) where {C,NrPlusNy} =
     :(@inline; return IntPolynomial($([one(C)]), IntMonomialVector{NrPlusNy,0}(IntPolynomials.unsafe, m.e, m.index:m.index)))
 
-Base.iterate(frs::FacialReductionDataSliceFirst) = (1, frs.data.objective), (:obj, 1, 0, 1, 1, 1, 1)
+Base.iterate(frs::FacialReductionDataSliceFirst) = (1, frs.data.objective), (:obj, 1, 1, 1, 1, 1, 1)
 
 function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinner, idxmon, idxrow, idxcol, k)::Tuple{Symbol,Int,Int,Int,Int,Int,Int})
     # 1. obj(x)
@@ -448,7 +447,7 @@ function Base.iterate(frs::FacialReductionDataSliceFirst, (pos, idxouter, idxinn
     # definition later.
     if pos === :obj
         @assert(isone(idxouter))
-        if iszero(idxinner)
+        if isone(idxinner) # the first grouping from the objective is already done, instead we use the prefactor
             iszero(frs.data.prefactor) || return (k += 1, frs.data.prefactor), (:obj, idxouter, idxinner +1, 1, 1, 1, k)
             idxinner += 1
         end
@@ -546,13 +545,12 @@ struct FacialReductionDataSliceRest{Matrix,C,NrPlusNy,MV<:IntMonomialVector{NrPl
     M²::MV
     k::Int
     dim::IN
-    extdegM::Tuple{Int,Int}
 
     FacialReductionDataSliceRest{false,C}(M::MV, M⁺::MV, M²::MV, k::Int) where {C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} =
-        new{false,C,NrPlusNy,MV,Nothing}(M, M⁺, M², k, nothing, extdegree(M))
+        new{false,C,NrPlusNy,MV,Nothing}(M, M⁺, M², k, nothing)
     FacialReductionDataSliceRest{true,C}(M::MV, M⁺::MV, M²::MV, k::Int, dim::Int) where
         {C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} =
-        new{true,C,NrPlusNy,MV,Int}(M, M⁺, M², k, dim, extdegree(M))
+        new{true,C,NrPlusNy,MV,Int}(M, M⁺, M², k, dim)
 end
 
 Base.length(frs::FacialReductionDataSliceRest) = length(frs.M²)

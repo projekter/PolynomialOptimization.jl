@@ -39,7 +39,7 @@ function FacialReduction.facial_reduction!(state::FRState,
         # sᵢ = (p + ∑_{a ∈ M⁺} λ₂ₐ e₂ₐ) × ...
         # ⟨sᵢⱼ, gⱼₖ(x)⟩ = 0, so we only need to check nonzero terms in g
         m = monomial(t)
-        if FacialReduction.inΣhatofMperp(dataslice.M, m, dataslice.extdegM, state.newExponents)
+        if FacialReduction.inΣhatofMperp(dataslice.M², m)
             if haskey(pcoeffs, m.index)
                 pidx = pcoeffs[m.index]
             else

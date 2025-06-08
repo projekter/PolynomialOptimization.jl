@@ -102,71 +102,8 @@ function updateM⁺!(data::FacialReductionData; verbose::Bool=false)
     return data
 end
 
-@inline function inΣhatofMperp(m::IntMonomial{Nr,0}, subvector::IntMonomialVector{Nr,0}, newExponents::AbstractArray{Int}, finished) where {Nr}
-    d = degree(m)
-    @inbounds for m₁ in subvector
-        isnothing(finished) || !finished[] || return true
-        maybe_present = true
-        degm₁ = degree(m₁)
-        remdeg = d - degm₁
-        for (j, (m₁ⱼ, mⱼ)) in enumerate(zip(exponents(m₁), exponents(m)))
-            if (newExponents[j] = mⱼ - m₁ⱼ) < 0 || (remdeg -= newExponents[j]) < 0
-                maybe_present = false
-                break
-            end
-        end
-        maybe_present || continue
-        iszero(remdeg) || continue
-        degm₂ = d - degm₁
-        m₂idx = exponents_to_index(subvector.e, newExponents, degm₂)
-        iszero(m₂idx) && continue
-        if insorted(IntMonomial{Nr,0}(IntPolynomials.unsafe, subvector.e, m₂idx, degm₂), subvector)
-            isnothing(finished) || (finished[] = true)
-            return false
-        end
-    end
-    return true
-end
-
-@inline function inΣhatofMperp(M::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}, (mindegM, maxdegM)::Tuple{Int,Int},
-                               newExponents::AbstractMatrix{Int}) where {Nr}
-    # p ∈ ̂Σ(M)⟂ = Σ(M)⟂, which is simply the set of all polynomials in ℝ_{2d} with exponents not in M + M
-    # We need to figure out whether ∃m₁, m₂ ∈ M : m = m₁ + m₂.
-    # Clearly, this implies that degree(m₁) + mindegree(M) ≤ degree(m) ≤ degree(m₁) + maxdegree(M)
-    # Therefore, we can restrict our search for m₁ to degree(m) - maxdegree(M) ≤ degree(m₁) ≤ degree(m) - mindegree(M).
-    @assert(length(newExponents) ≥ Nr)
-    d = degree(m)
-    drange = degree_range(M.e, d-maxdegM:d-mindegM)
-    # It would be good to specify degree here; but we don't know whether the exponent set actually contains monomials of the
-    # boundary degrees.
-    subvector = @view(M[range(searchsortedfirst(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, first(drange))),
-                              searchsortedlast(M, IntMonomial{Nr,0}(IntPolynomials.unsafe, M.e, last(drange))))])
-    nthreads = Threads.nthreads()
-    if isone(nthreads) || length(subvector) < 128
-        return inΣhatofMperp(m, subvector, newExponents, nothing)
-    end
-    totalsize = length(subvector)
-    nthreads = min(nthreads, max(1, totalsize >> 7))
-    batchsize = div(totalsize, nthreads, RoundUp)
-    tasks = Vector{Task}(undef, nthreads)
-    r = 1:batchsize
-    finished = Ref(false)
-    ccall(:jl_enter_threaded_region, Cvoid, ())
-    try
-        @inbounds for (i, n) in zip(1:nthreads, eachcol(newExponents))
-            subvectorₜ = @view(subvector[r])
-            tasks[i] = Threads.@spawn inΣhatofMperp($m, $subvectorₜ, $n, $finished)
-            r = last(r)+1:min(last(r)+batchsize, length(subvector))
-        end
-        result = true
-        for task in tasks
-            result &= fetch(task)
-        end
-        return result
-    finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
-    end
-end
+@inline inΣhatofMperp(M²::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}) where {Nr} = !(m ∈ M²)
+    # p ∈ ̂Σ(M)⟂ = Σ(M)⟂, which is simply the set of all polynomials in ℝ_{2d} with exponents not in M + M, i.e. the M² set.
 
 @inline function λindex(M⁺::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}, newExponents::AbstractArray{Int}) where {Nr}
     @assert(length(newExponents) ≥ Nr)
