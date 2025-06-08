@@ -92,9 +92,6 @@ function updateM⁺!(data::FacialReductionData; verbose::Bool=false)
         for (groupings, M⁺s) in zip(data.M_psd, data.M⁺_psd)
             M⁺s .= M⁺.(groupings; verbose)
         end
-        for (groupings, M⁺s) in zip(data.M_psd_noy, data.M⁺_psd_noy)
-            M⁺s .= M⁺.(groupings; verbose)
-        end
     end
     isempty(data.M_psd) || @verbose_info("├ PSD constraints (", upd_time, " seconds)")
 
@@ -172,7 +169,6 @@ function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ
                     groupings[i] = newM
                     changed = true
                 end
-                # TODO: adjust M_noy
             end
         end
         @assert(last(r) == length(λ))
