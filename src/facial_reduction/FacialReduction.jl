@@ -179,7 +179,7 @@ end
 
 function facial_reduction! end
 
-function _facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, maxiter::Integer=0, kwargs...)
+function facial_reduction!(method::Val, data::FacialReductionData; verbose::Bool=false, maxiter::Integer=0, kwargs...)
     i = 1
     @verbose_info("Starting facial reduction")
     try
@@ -224,14 +224,9 @@ if no further reduction could be found in one iteration or if `maxiter` was reac
 data from the last complete iteration.
 """
 facial_reduction(@nospecialize(method::Val), relaxation::AbstractRelaxation; verbose::Bool=false, kwargs...) =
-    # Relaxation.embed(
-    #     @invoke(facial_reduction!(method::Val, FacialReductionData(relaxation; verbose)::FacialReductionData;
-    #                               verbose, kwargs...)),
-    #     Relaxation.groupings(relaxation);
-    #     verbose
-    # )
-    Relaxation.embed(
-        _facial_reduction!(method, FacialReductionData(relaxation; verbose); verbose, kwargs...),
+    Relaxation.embed!(
+        @invoke(facial_reduction!(method::Val, FacialReductionData(relaxation; verbose)::FacialReductionData;
+                                  verbose, kwargs...)),
         Relaxation.groupings(relaxation);
         verbose
     )
