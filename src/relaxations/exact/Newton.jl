@@ -39,7 +39,7 @@ struct Newton{P<:Problem,G<:RelaxationGroupings} <: AbstractRelaxationSparse{P}
         basis isa IntMonomialVector ||
             error("Newton polytope calculation did not give results. Were the results written to a file?")
         @verbose_info("Embedding new groupings in old")
-        gentime = @elapsed(gr = embed(RelaxationGroupings(
+        gentime = @elapsed(gr = embed!(RelaxationGroupings(
             IntMonomialVector{Nr,Nc,I}[basis],
             parent.zeros,
             parent.nonnegs,

@@ -860,12 +860,12 @@ function Base.intersect(a::IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg},
     if ae.minmultideg == be.minmultideg
         minmultideg = ae.minmultideg
     else
-        minmultideg = elementwise(max, ae.minmultideg, be.minmultideg)
+        minmultideg = max.(ae.minmultideg, be.minmultideg)
     end
     if ae.maxmultideg == be.maxmultideg
         maxmultideg = ae.maxmultideg
     else
-        maxmultideg = elementwise(min, ae.maxmultideg, be.maxmultideg)
+        maxmultideg = min.(ae.maxmultideg, be.maxmultideg)
     end
     all(splat(≤), zip(minmultideg, maxmultideg)) || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
     any(∘(!, iszero), minmultideg) || any(<(maxdeg), maxmultideg) ||
@@ -932,8 +932,8 @@ function Base.intersect(a::Union{<:IntMonomialVector{Nr,Nc,I,<:ExponentsMultideg
                 minmultideg = ae.minmultideg
                 maxmultideg = ae.maxmultideg
             else
-                minmultideg = elementwise(max, ae.minmultideg, be.minmultideg)
-                maxmultideg = elementwise(min, ae.maxmultideg, be.maxmultideg)
+                minmultideg = max.(ae.minmultideg, be.minmultideg)
+                maxmultideg = min.(ae.maxmultideg, be.maxmultideg)
                 all(splat(≤), zip(minmultideg, maxmultideg)) || return IntMonomialVector{Nr,Nc}(unsafe, ae, I[])
             end
             newe = ExponentsMultideg{Nr+2Nc,I}(mindeg, maxdeg, minmultideg, maxmultideg)
@@ -1194,13 +1194,13 @@ function MultivariatePolynomials.merge_monomial_vectors(X::AbstractVector{T}) wh
                     # the exponents don't include each other. Construct covering ones.
                     if !copied
                         e = ExponentsMultideg{Nr+2Nc,I}(min(e.mindeg, eᵢ.mindeg), max(e.maxdeg, eᵢ.maxdeg),
-                                elementwise(min, e.minmultideg, eᵢ.minmultideg),
-                                elementwise(max, e.maxmultideg, eᵢ.maxmultideg))
+                                min.(e.minmultideg, eᵢ.minmultideg), max.(e.maxmultideg, eᵢ.maxmultideg))
                         copied = true
                     else
-                        mind = elementwise!(e.minmultideg, min, e.minmultideg, eᵢ.minmultideg)
-                        maxd = elementwise!(e.maxmultideg, max, e.maxmultideg, eᵢ.maxmultideg)
-                        e = ExponentsMultideg{Nr+2Nc,I}(min(e.mindeg, eᵢ.mindeg), max(e.maxdeg, eᵢ.maxdeg), mind, maxd)
+                        e.minmultideg .= min.(e.minmultideg, eᵢ.minmultideg)
+                        e.maxmultideg .= max.(e.maxmultideg, eᵢ.maxmultideg)
+                        e = ExponentsMultideg{Nr+2Nc,I}(min(e.mindeg, eᵢ.mindeg), max(e.maxdeg, eᵢ.maxdeg), e.minmultideg,
+                            e.maxmultideg)
                     end
                 end
             end

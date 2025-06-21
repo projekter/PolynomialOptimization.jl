@@ -93,7 +93,7 @@ end
     rel = Relaxation.Dense(prob, 3)
     groupings = Relaxation.groupings(rel)
     g₁ = PolynomialOptimization.change_backend(groupings.obj[1], z)
-    g₂ = PolynomialOptimization.change_backend(groupings.psds[1][1], z)
+    g₂ = PolynomialOptimization.change_backend(groupings.psds[1][1][1], z) # we have the same grouping for all indices
 
     for solver in sossolvers
         skipsolver(solver) && continue
@@ -103,11 +103,11 @@ end
             cert = SOSCertificate(res)
             sosc1 = dot(g₁, cert.data[1][1], g₁)
             @test almost_equal(cert[:objective, 1], sosc1)
-            ref = reshape(cert.data[2][1], (size(psd, 1), length(g₂), size(psd, 2), length(g₂)))
-            # now do einsum("a, iajb, b", conj(g₂), cm, g₂). Note that the second system must come first (col major).
+            ref = reshape(cert.data[2][1], (length(g₂), size(psd, 1), length(g₂), size(psd, 2)))
+            # now do einsum("a, aibj, b", conj(g₂), cm, g₂). Note that the second system must come first (col major).
             sosc2 = zeros(polynomial_type(eltype(psd), Complex{Float64}), size(psd)...)
-            for b in 1:length(g₂), j in axes(psd, 2), a in 1:length(g₂), i in axes(psd, 1)
-                sosc2[i, j] += conj(g₂[a]) * ref[i, a, j, b] * g₂[b]
+            for j in axes(psd, 2), b in 1:length(g₂), i in axes(psd, 1), a in 1:length(g₂)
+                sosc2[i, j] += conj(g₂[a]) * ref[a, i, b, j] * g₂[b]
             end
             cmp = hs(PolynomialOptimization.change_backend.(cert[:psd, 1, 1], (z,)))
             @test size(cmp) == size(psd)

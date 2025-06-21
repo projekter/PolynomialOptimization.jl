@@ -1,4 +1,5 @@
-function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set, e, range₁, grouping, constr, sync)
+function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set::AbstractSet, e::AbstractExponents, range₁,
+                       grouping::IntMonomialVector, constr::IntPolynomial, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
     # TODO: veciter? range₁ are at most two units ranges
     @inbounds for t in constr
@@ -21,7 +22,31 @@ function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set, e, range₁, groupi
     return
 end
 
-function grouping_loop(::Val{0}, ::Val, ::Val{true}, mons_idx_set, e, range, grouping, constr, sync)
+function grouping_loop(::Val, ::Val{0}, ::Val, mons_idx_set::AbstractSet, e::AbstractExponents, range₁,
+                       grouping₁::IntMonomialVector, grouping₂::IntMonomialVector, constr::IntPolynomial, sync)
+    this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
+    @inbounds for t in constr
+        monₜ = monomial(t)
+        for i in range₁
+            g₁ = grouping₁[i]
+            for g₂ in grouping₂
+                push!(this_set, FastKey(monomial_index(e, g₁, monₜ, g₂)))
+            end
+        end
+    end
+    if !isnothing(sync)
+        lock(sync)
+        try
+            union_!(mons_idx_set, this_set)
+        finally
+            unlock(sync)
+        end
+    end
+    return
+end
+
+function grouping_loop(::Val{0}, ::Val, ::Val{true}, mons_idx_set::AbstractSet, e::AbstractExponents, range,
+                       grouping::IntMonomialVector, constr::IntPolynomial, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
     gview = @inbounds @view grouping[range]
     for t in constr
@@ -44,7 +69,8 @@ function grouping_loop(::Val{0}, ::Val, ::Val{true}, mons_idx_set, e, range, gro
     return
 end
 
-function grouping_loop(::Val{0}, ::Val, ::Val{false}, mons_idx_set, e, range, grouping, constr, sync)
+function grouping_loop(::Val{0}, ::Val, ::Val{false}, mons_idx_set::AbstractSet, e::AbstractExponents, range,
+                       grouping::IntMonomialVector, constr::IntPolynomial, sync)
     this_set = isnothing(sync) ? mons_idx_set : Set{FastKey{UInt}}()
     gview = @inbounds @view grouping[range]
     for t in constr
@@ -73,15 +99,26 @@ end
 
 # Out of necessity, our groupings contain abstract types. Given that the number of groupings will be manageable, but the
 # groupings themselves can be quite large, it pays off to introduce a function barrier specializing on the actual type.
-function grouping_loop(Nr::Val, ::Val{Nc}, constr_is_real::Val, mons_idx_set, e, grouping, constr) where {Nc}
+function grouping_loop(Nr::Val, ::Val{Nc}, constr_is_real::Val, mons_idx_set::AbstractSet, e::AbstractExponents,
+                       grouping₁::IntMonomialVector, grouping₂::IntMonomialVector, constr::IntPolynomial) where {Nc}
+    length(grouping₂) > length(grouping₁) &&
+        return grouping_loop(Nr, Val(Nc), Val(constr_is_real), mons_idx_set, e, grouping₂, grouping₁, constr)
     nthreads = Threads.nthreads()
-    if isone(nthreads) || length(grouping) < 100
-        grouping_loop(Nr, Val(Nc), constr_is_real, mons_idx_set, e, 1:length(grouping), grouping, constr, nothing)
+    samegrp = grouping₁ === grouping₂
+    if isone(nthreads) || length(grouping₁) < 100
+        if iszero(Nc) && !samegrp
+            grouping_loop(Nr, Val(Nc), constr_is_real, mons_idx_set, e, 1:length(grouping₁), grouping₁, grouping₂, constr,
+                          nothing)
+        else
+            grouping_loop(Nr, Val(Nc), constr_is_real, mons_idx_set, e, 1:length(grouping₁), grouping₁, constr, nothing)
+            samegrp || grouping_loop(Nr, Val(Nc), constr_is_real, mons_idx_set, e, 1:length(grouping₂), grouping₂, constr,
+                                     nothing)
+        end
     elseif iszero(Nc)
         # The first entry in grouping has length 1, the second length 2, ...; consider this when dividing the search space.
         # A single task will always do n items from the beginning plus n items from the end, giving a constant number of
         # iterations.
-        iterations = div(length(grouping), 2, RoundUp)
+        iterations = div(length(grouping₁), 2, RoundUp)
         iterationsperthread = div(iterations, nthreads, RoundUp)
         startindex = 1
         ccall(:jl_enter_threaded_region, Cvoid, ())
@@ -91,12 +128,17 @@ function grouping_loop(Nr::Val, ::Val{Nc}, constr_is_real::Val, mons_idx_set, e,
             @inbounds for tid in 1:nthreads
                 ranges₁ = Iterators.flatten(
                     (startindex:min(startindex + iterationsperthread -1, iterations),
-                     range(max(length(grouping) - startindex +1 - iterationsperthread, iterations) +1,
-                           length(grouping) - startindex +1))
+                     range(max(length(grouping₁) - startindex +1 - iterationsperthread, iterations) +1,
+                           length(grouping₁) - startindex +1))
                 )
                 startindex += iterationsperthread
-                threads[tid] = Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges₁,
-                                                            $grouping, $constr, $sync)
+                threads[tid] = if samegrp
+                    Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges₁, $grouping₁,
+                                                 $constr, $sync)
+                else
+                    Threads.@spawn grouping_look($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges₁, $grouping₁,
+                                                 $grouping₂, $constr, $sync)
+                end
             end
             for thread in threads
                 wait(thread)
@@ -105,17 +147,28 @@ function grouping_loop(Nr::Val, ::Val{Nc}, constr_is_real::Val, mons_idx_set, e,
             ccall(:jl_exit_threaded_region, Cvoid, ())
         end
     else
-        iterations = length(grouping)
+        iterations = length(grouping₁)
         iterationsperthread = div(iterations, nthreads, RoundUp)
         startindex = 1
         try
-            threads = Vector{Task}(undef, iszero(Nc) ? nthreads : 2nthreads)
+            threads = Vector{Task}(undef, samegrp ? nthreads : 2nthreads)
             sync = Threads.SpinLock()
             @inbounds for tid in 1:nthreads
                 ranges = startindex:min(startindex + iterationsperthread -1, iterations)
                 startindex += iterationsperthread
                 threads[tid] = Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges,
-                                                            $grouping, $constr, $sync)
+                                                            $grouping₁, $constr, $sync)
+            end
+            if !samegrp
+                iterations = length(grouping₂)
+                iterationsperthread = div(iterations, nthreads, RoundUp)
+                startindex = 1
+                @inbounds for tid in nthreads+1:2nthreads
+                    ranges = startindex:min(startindex + iterationsperthread -1, iterations)
+                    startindex += iterationsperthread
+                    threads[tid] = Threads.@spawn grouping_loop($Nr, $(Val(Nc)), $constr_is_real, $mons_idx_set, $e, $ranges,
+                                                                $grouping₂, $constr, $sync)
+                end
             end
             for thread in threads
                 wait(thread)
@@ -206,30 +259,48 @@ function merge_constraints(objective::IntPolynomial{<:Any,Nr,Nc}, zero::Abstract
             sizehint_!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : (isz ? 4newbound : 2newbound)),
                 shrink=false)
             for grouping in groupings
-                grouping_loop(Val(Nr), Val(Nc), Val(!isz), mons_idx_set, e, grouping, constrᵢ)
+                grouping_loop(Val(Nr), Val(Nc), Val(!isz), mons_idx_set, e, grouping, grouping, constrᵢ)
             end
         end
     end
 
     # 3. psd constraints
-    # Those are modeled in terms of SOS matrices. Given the basis u of `degree`, an m×m-matrix M is a SOS matrix iff
-    # M(x) = (u ⊗ 1ₘ)ᵀ Z (u ⊗ 1ₘ) with Z ⪰ 0. Still, there is no duplication of the Z-coefficients (apart from
+    # Those are modeled in terms of SOS matrices. Given the vector u of basis vectors of `degree`, an m×m-matrix M is a SOS
+    # matrix iff M(x) = Diag(u)ᵀ Z Diag(u) with Z ⪰ 0. Still, there is no duplication of the Z-coefficients (apart from
     # symmetry), so there is no way in which these unknown coefficients could potentially cancel: every entry in Z will
-    # appear in exactly one cell in a triangle of M. So basically, all that we have to do is to apply the SOS
-    # decomposition cell-wise.
+    # appear in exactly one cell in a triangle of M. So basically, all that we have to do is to apply the SOS decomposition
+    # cell-wise.
     isempty(psd) || @verbose_info("├ PSD constraints")
     for (groupings, psdᵢ) in zip(groupings.psds, psd)
         dim = size(psdᵢ, 1)
-        newbound = sum(∘(trisize, length), groupings) * sum(@capture(length($psdᵢ[i, j]) for j in 1:dim for i in 1:j), init=0)
+        maxsize = 0
+        for constr_grouping in groupings
+            if constr_grouping isa ConstantVector
+                maxsize += trisize(length(first(constr_grouping)))
+            else
+                sidesize = sum(length, constr_grouping, init=0)
+                for groupingᵢ in constr_grouping
+                    maxsize += length(groupingᵢ) * sidesize
+                    sidesize -= length(groupingᵢ)
+                end
+            end
+        end
+        maxconstr = 0
+        for j in 1:dim, i in 1:j
+            len = length(psdᵢ[i, j])
+            maxconstr = max(len, maxconstr)
+        end
+        newbound = maxsize * maxconstr
         sizehint_!(mons_idx_set, length(mons_idx_set) + (iszero(Nc) ? newbound : 2newbound), shrink=false)
         @inbounds for j in 1:dim
             for i in 1:j-1
-                for grouping in groupings
-                    grouping_loop(Val(Nr), Val(Nc), Val(false), mons_idx_set, e, grouping, psdᵢ[i, j])
+                for constr_grouping in groupings
+                    grouping_loop(Val(Nr), Val(Nc), Val(false), mons_idx_set, e, constr_grouping[i], constr_grouping[j],
+                                  psdᵢ[i, j])
                 end
             end
-            for grouping in groupings
-                grouping_loop(Val(Nr), Val(Nc), Val(true), mons_idx_set, e, grouping, psdᵢ[j, j])
+            for constr_grouping in groupings
+                grouping_loop(Val(Nr), Val(Nc), Val(true), mons_idx_set, e, constr_grouping[j], constr_grouping[j], psdᵢ[j, j])
             end
         end
     end

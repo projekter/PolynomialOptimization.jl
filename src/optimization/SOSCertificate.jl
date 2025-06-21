@@ -303,12 +303,11 @@ function SOSCertificate(result::Result)
         end
     end
 
-    @inbounds for (constrᵢ, groupingᵢ) in zip(prob.constr_psd, grouping.psds)
+    @inbounds for groupingᵢ in grouping.psds
         infoᵢ = info[i += 1]
         data[i] = dataᵢ = Vector{Any}(undef, length(infoᵢ))
         for (j, (solvertype, position)) in enumerate(infoᵢ)
-            dataᵢ[j] = sos_matrix(relaxation, state, length(groupingᵢ[j]) * size(constrᵢ, 1), Val(solvertype), position,
-                rawdata)
+            dataᵢ[j] = sos_matrix(relaxation, state, sum(length, groupingᵢ[j], init=0), Val(solvertype), position, rawdata)
         end
     end
     return SOSCertificate(relaxation, result.objective, data)
@@ -349,15 +348,17 @@ function sos_decomposition(matrix, grouping::IntMonomialVector{Nr,Nc,I}, ϵ) whe
     return polynomials
 end
 
-function sos_decomposition(::Type{Matrix}, matrix, grouping::IntMonomialVector{Nr,Nc,I}, ϵ) where {Nr,Nc,I<:Integer}
+function sos_decomposition(matrix, grouping::AbstractVector{IntMonomialVector{Nr,Nc,I}}, ϵ) where {Nr,Nc,I<:Integer}
     matrixdim = LinearAlgebra.checksquare(matrix)
-    n = length(grouping)
-    d = matrixdim ÷ n
-    @assert(d * n == matrixdim)
+    @assert(sum(length, grouping, init=0) == matrixdim)
+    d = length(grouping)
+    if grouping isa ConstantVector
+        @inbounds n = length(grouping[1])
+    end
 
     eig = eigen(matrix)
     start = searchsortedfirst(eig.values, ϵ * eig.values[end])
-    Mᵀ = Matrix{polynomial_type(grouping, eltype(matrix))}(undef, d, matrixdim - start +1) # our resulting SOS matrix is Mᵀ M
+    Mᵀ = Matrix{IntPolynomial{eltype(matrix),Nr,Nc,<:IntMonomialVector{Nr,Nc,I}}}(undef, d, matrixdim - start +1) # our resulting SOS matrix is Mᵀ M
     @inbounds for (k, i) in enumerate(matrixdim:-1:start)
         val = sqrt(eig.values[i])
         vec = @view(eig.vectors[:, i])
@@ -369,12 +370,20 @@ function sos_decomposition(::Type{Matrix}, matrix, grouping::IntMonomialVector{N
                 vec[j] *= val
             end
         end
-        coeffs = reshape(vec, d, n) # col-major: the second system is of size d, so here the first
-        for j in 1:d
-            @inbounds Mᵀ[j, k] = IntPolynomial(coeffs[j, :], grouping)
+        if grouping isa ConstantVector
+            coeffs = reshape(vec, n, d) # col-major: the first system is of size d, so here the second
+            for j in 1:d
+                @inbounds Mᵀ[j, k] = IntPolynomial(coeffs[:, j], grouping[j])
+            end
+        else
+            startpos = 1
+            for j in 1:d
+                @inbounds Mᵀ[j, k] = IntPolynomial(vec[startpos:startpos+length(grouping[j])-1], grouping[j])
+                startpos += length(grouping[j])
+            end
         end
     end
-    return transpose(Mᵀ)
+    return identity.(transpose(Mᵀ)) # Mᵀ contains abstract types, maybe we can do better
 end
 
 @inline _trunc(x, ϵ) = abs(x) < ϵ ? zero(x) : x
@@ -415,7 +424,7 @@ function Base.show(io::IO, m::MIME"text/plain", cert::SOSCertificate, ϵ=1e-6)
 
     println(io, "Sum-of-squares certificate for polynomial optimization problem")
     if !isempty(prob.constr_psd)
-        println(io, "Note: ℙ[X] = X' X")
+        println(io, "Note: ℙ[X] = X X'")
     end
     show(io, m, prob.objective)
     if abs(cert.objective) ≥ ϵ
@@ -483,7 +492,7 @@ function Base.show(io::IO, m::MIME"text/plain", cert::SOSCertificate, ϵ=1e-6)
         beginning = true
         Base.print_matrix(io, constr, "+ ⟨[", "  ", "],")
         for (dataᵢ, groupingᵢ) in zip(cert.data[i], grouping)
-            constrpolymat = sos_decomposition(Matrix, dataᵢ, groupingᵢ, ϵ)
+            constrpolymat = sos_decomposition(dataᵢ, groupingᵢ, ϵ)
             println(io)
             if beginning
                 pre = "   ℙ["
@@ -491,7 +500,7 @@ function Base.show(io::IO, m::MIME"text/plain", cert::SOSCertificate, ϵ=1e-6)
             else
                 pre = "   + ℙ["
             end
-            Base.print_matrix(io, constrpolymat, pre, "  ", "]")
+            Base.print_matrix(io, constrpolymat', pre, "  ", "]")
         end
         println(io, "⟩")
         i += 1
@@ -517,7 +526,7 @@ Base.@propagate_inbounds function Base.getindex(s::SOSCertificate, type::Symbol,
         grouping = groupings.nonnegs[index]
     elseif type === :psd
         grouping = groupings.psds[index]
-        return [sos_decomposition(Matrix, m, g, ϵ) for (m, g) in zip(s.data[idx], grouping)]
+        return [sos_decomposition(m, g, ϵ) for (m, g) in zip(s.data[idx], grouping)]
     end
     return [sos_decomposition(m, g, ϵ) for (m, g) in zip(s.data[idx], grouping)]
 end
@@ -533,7 +542,7 @@ Base.@propagate_inbounds function Base.getindex(s::SOSCertificate, type::Symbol,
         groupingᵢ = groupings.nonnegs[index]
     elseif type === :psd
         groupingᵢ = groupings.psds[index]
-        return sos_decomposition(Matrix, s.data[idx][grouping], groupingᵢ[grouping], ϵ)
+        return sos_decomposition(s.data[idx][grouping], groupingᵢ[grouping], ϵ)
     end
     return sos_decomposition(s.data[idx][grouping], groupingᵢ[grouping], ϵ)
 end

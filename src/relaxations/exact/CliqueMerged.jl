@@ -6,9 +6,13 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
     # first form the clique graph; this time, we work with the adjacency matrix
     n = length(cliques)
     n ≤ 1 && return [smallcliques; cliques]
-    @inbounds adjmOwn = collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
-                                                 length(cliques[i] ∪ cliques[j])^3 : 0
-                                         for i in 1:n, j in 1:n))::Matrix{Int} # capture n?
+    adjmOwn = Matrix{Int}(undef, n, n)
+    @inbounds for j in 1:n
+        fill!(@view(adjmOwn[1:j, j]), 0)
+        for i in j+1:n
+            adjmOwn[i, j] = length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3
+        end
+    end
     idxOwn = fill(true, n)
     GC.@preserve adjmOwn idxOwn begin
         adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
@@ -16,9 +20,7 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
         deleted = 0
         @inbounds while true
             # select two permissible cliques with the highest weight
-            w, maxidx = findmax(adjm)
-            i = maxidx[1]
-            j = maxidx[2]
+            w, (i, j) = findmax(adjm)
             # while clique graph contains positive weights
             w ≤ 0 && break
             # merge cliques
@@ -44,12 +46,15 @@ function merge_cliques!(_cliques::AbstractVector{<:AbstractSet{T}}) where {T}
                 n -= deleted
                 # we already have enough space allocated at adjm; we will now simply overwrite it.
                 adjm = unsafe_wrap(Array, pointer(adjmOwn), (n, n), own=false)
-                adjm .= collect(@capture(i > j ? length($cliques[i])^3 + length(cliques[j])^3 -
-                                                 length(cliques[i] ∪ cliques[j])^3 : 0
-                                         for i in 1:n, j in 1:n))
+                @inbounds for j in 1:n
+                    fill!(@view(adjm[1:j, j]), 0)
+                    for i in j+1:n
+                        adjm[i, j] = length(cliques[i])^3 + length(cliques[j])^3 - length(cliques[i] ∪ cliques[j])^3
+                    end
+                end
                 # same for idx
                 idx = unsafe_wrap(Array, pointer(idxOwn), n, own=false)
-                idx .= true
+                fill!(idx, true)
                 deleted = 0
             else
                 # update clique graph
@@ -87,6 +92,27 @@ function merge_cliques(cl::Vector{<:IntMonomialVector{Nr,Nc,I}}) where {Nr,Nc,I<
     converted = _convert_cliques(cl)
     merged = merge_cliques!(converted[2])
     return IntMonomialVector{Nr,Nc,I}[IntMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)) for mergedᵢ in merged]
+end
+
+function merge_cliques(cl::Vector{<:AbstractVector{<:IntMonomialVector{Nr,Nc,I}}}) where {Nr,Nc,I<:Integer}
+    dim = length(first(cl))
+    if all(Base.Fix2(isa, ConstantVector), cl)
+        converted = _convert_cliques(first.(cl))
+        merged = merge_cliques!(converted[2])
+        return AbstractVector{IntMonomialVector{Nr,Nc,I}}[
+            ConstantVector{IntMonomialVector{Nr,Nc,I}}(
+                IntMonomialVector{Nr,Nc}(converted[1], collect(mergedᵢ)), dim
+            ) for mergedᵢ in merged
+        ]
+    else
+        # Difficult: each grouping potentially has a different basis vector per index. We must check whether we can merge the
+        # basis vectors for each index separately; but then we'll have to decide whether we want to accept the merge of a whole
+        # grouping (force-merging all basis vectors that were not merged before because it would not have been beneficial) or
+        # keep them separate (force-discarding the mergings found before). In order to make this decision, we should compare
+        # the total benefit per grouping.
+        error("Clique merging of semidefinite constraints with different bases per indices is not implemented yet")
+        # TODO
+    end
 end
 
 function merge_cliques(groupings::Relaxation.RelaxationGroupings{Nr,Nc}) where {Nr,Nc}

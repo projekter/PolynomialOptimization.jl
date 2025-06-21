@@ -8,13 +8,6 @@ Short helper function that allows to determine the number of monomials in `n` va
 """
 monomial_count(n, d) = length(ExponentsDegree{n,UInt}(0:d))
 
-"""
-    trisize(n)
-
-Returns the number of items in the triangle of a matrix of side dimension `n`, ``\\frac{n(n +1)}{2}``.
-"""
-trisize(n) = (n * (n +1)) >> 1
-
 macro twice(symb::Symbol, condition, body)
     esc(quote
         let $symb=false
@@ -85,19 +78,24 @@ end
     end
 end
 
-struct ScalarMatrix{X} <: AbstractMatrix{X} # we could make it mutable and fully implement the AbstractArray interface, but we
-                                            # don't need it
+struct ScalarArray{X,N} <: AbstractArray{X,N} # we could make it mutable and fully implement the AbstractArray interface, but
+                                              # we don't need it
     x::X
 end
 
-Base.size(::ScalarMatrix) = (1, 1)
-Base.length(::ScalarMatrix) = 1
-@inline function Base.getindex(m::ScalarMatrix, args...)
+ScalarArray{<:Any,N}(x::X) where {X,N} = ScalarArray{X,N}(x)
+
+Base.size(::ScalarArray{<:Any,N}) where {N} = ntuple(_ -> 1, Val(N))
+Base.length(::ScalarArray) = 1
+@inline function Base.getindex(m::ScalarArray, args...)
     @boundscheck checkbounds(m, args...)
     return m.x
 end
-Base.iterate(m::ScalarMatrix) = m.x, nothing
-Base.iterate(::ScalarMatrix, ::Nothing) = nothing
+Base.iterate(m::ScalarArray) = m.x, nothing
+Base.iterate(::ScalarArray, ::Nothing) = nothing
+
+const ScalarVector{X} = ScalarArray{X,1}
+const ScalarMatrix{X} = ScalarArray{X,2}
 
 """
     count_uniques(vec::AbstractVector[, callback])

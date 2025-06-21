@@ -81,8 +81,8 @@ function halfpolytope(method::Symbol, poly::IntPolynomial{<:Any,Nr,Nc,<:IntMonom
     noconstr = typeof(poly)[]
     nogroup = Vector{IntMonomialVector{Nr,Nc,I}}[]
     return halfpolytope(Val(method), poly, Val(haveMPI[]); zero=noconstr, nonneg=noconstr, psd=Matrix{typeof(poly)}[],
-        groupings=RelaxationGroupings(IntMonomialVector{Nr,Nc,I}[mons], nogroup, nogroup, nogroup,
-            Vector{variable_union_type(poly)}[]), kwargs...)
+        groupings=RelaxationGroupings(IntMonomialVector{Nr,Nc,I}[mons], nogroup, nogroup,
+            Vector{AbstractVector{IntMonomialVector{Nr,Nc,I}}}[], Vector{variable_union_type(poly)}[]), kwargs...)
 end
 function halfpolytope(method::Symbol, poly::AbstractPolynomialLike; verbose::Bool=false, kwargs...)
     out = halfpolytope(method, IntPolynomial(poly); verbose, kwargs...)

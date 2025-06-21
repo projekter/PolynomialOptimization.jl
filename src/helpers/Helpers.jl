@@ -14,7 +14,7 @@ using .IntPolynomials, .IntPolynomials.MultivariateExponents
 using .IntPolynomials: IntMonomialOrConj
 import .IntPolynomials.MultivariateExponents: iterate! # be careful to avoid duplication of methods; let's reuse this one
 
-include("./MatrixPolynomials.jl")
+include("./ArrayPolynomials.jl")
 
 """
     issubset_sorted(a, b)
@@ -31,6 +31,13 @@ function issubset_sorted(a, b)
     end
     return true
 end
+
+"""
+    trisize(n)
+
+Returns the number of items in the triangle of a matrix of side dimension `n`, ``\\frac{n(n +1)}{2}``.
+"""
+trisize(n) = (n * (n +1)) >> 1
 
 if VERSION < v"1.11"
     # Julia 1.10 can be very slow since the union will always try to shrink. To avoid piracy, copy the shrink-customizable
