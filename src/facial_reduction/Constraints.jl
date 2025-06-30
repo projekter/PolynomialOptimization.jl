@@ -351,12 +351,12 @@ function Relaxation.embed!(data::FacialReductionData{<:Real,NrPlusNy}, old::Rela
             psds[i] = psdᵢ = Vector{AbstractVector{IntMonomialVector{Nr,0,I}}}(undef, length(groupings))
             dim = length(first(old.psds[i]))
             for (j, grouping) in enumerate(groupings)
-                psdᵢ[j] = psdᵢⱼ = filter!(!isempty, _change_var_numbers.((grouping,), Val(Nr),
-                                                                         UnsafeIsSetAt.(NrPlusNy:-1:NrPlusNy-dim+1)))
+                psdᵢ[j] = psdᵢⱼ = _change_var_numbers.((grouping,), Val(Nr), UnsafeIsSetAt.(NrPlusNy:-1:NrPlusNy-dim+1))
                 if allequal(psdᵢⱼ)
                     psdᵢ[j] = ConstantVector{IntMonomialVector{Nr,0,I}}(first(psdᵢⱼ), dim)
                 end
             end
+            filter!(x -> !all(isempty, x), psdᵢ)
         end
     end
     @verbose_info("Embedding finished in ", conv_time, " seconds")
