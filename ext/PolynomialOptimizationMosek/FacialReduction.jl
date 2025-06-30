@@ -1,6 +1,6 @@
 mutable struct FRState
     const task::Mosek.Task
-    const newExponents::Matrix{Int}
+    const newExponents::Vector{Int}
     const numM⁺::Int
     numvars_avail::Int
     numvars::Int
@@ -25,7 +25,7 @@ mutable struct FRState
 
         new(
             task,
-            Matrix{Int}(undef, NrPlusNy, Threads.nthreads()),
+            Vector{Int}(undef, NrPlusNy),
             numM⁺, numM⁺, numM⁺, falses(numM⁺),
             numgs, 0
         )
