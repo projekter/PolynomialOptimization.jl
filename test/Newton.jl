@@ -3,10 +3,24 @@ using LinearAlgebra
 using PolynomialOptimization.Newton: halfpolytope, newton_methods
 using Combinatorics: combinations
 
-readlines_killr(io::IO) = last.(rsplit.(readlines(io), ("\r",), limit=2))
+function remove_control(s::AbstractString)
+    while startswith(s, "\e[2K") # clear line control character
+        pos = findfirst('\r', s)
+        if isnothing(pos)
+            s = s[5:end]
+        else
+            s = s[pos+1:end] # actually clear the line
+        end
+    end
+    while endswith(s, "\r")
+        s = s[1:end-1]
+    end
+    return s
+end
+readlines_removecontrol(io::IO) = remove_control.(readlines(io))
 
 # Adapter from https://discourse.julialang.org/t/a-minimal-example-with-base-redirect-stdout/64245/8
-function capture_stdout(f::Function, @nospecialize(readfn=readlines_killr))
+function capture_stdout(f::Function, @nospecialize(readfn=readlines_removecontrol))
     pipe = Pipe()
     started = Base.Event()
     writer = @async redirect_stdout($pipe) do

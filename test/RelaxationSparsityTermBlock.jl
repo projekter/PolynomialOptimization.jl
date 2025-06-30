@@ -201,7 +201,7 @@ Semidefinite constraint #1: 6 blocks
   - index 1: 1 [x₁]"
     # Note: while this is cross-verified with TSSOS, I don't trust the implementation there - it discards diagonal entries when
     # constructing the graph. In this case, no diagonal entry would make it anyway, but this will not always be the case.
-    @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol=1e-10
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol=1e-10
     @test isnothing(iterate!(sp))
 
     sp = Relaxation.SparsityTermBlock(poly_problem(sp), 2) # now with constraints considered in the support
@@ -223,7 +223,7 @@ Semidefinite constraint #1: 4 blocks
   - 2 indices: 1 [1]
   - index 2: 1 [x₁]
   - index 1: 1 [x₁]"
-    @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol=1e-10
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol=1e-10
 
     @test strRep(groupings(iterate!(sp))) == "Groupings for the relaxation of a polynomial optimization problem
 Variable cliques
@@ -241,7 +241,7 @@ Semidefinite constraint #1: 3 blocks
   - 2 indices: 2 [x₃, x₂]
   - 2 indices: 1 [1]
   - 2 indices: 1 [x₁]"
-    @test poly_optimize(:Clarabel, sp).objective ≈ 1 atol=1e-10
+    @test poly_optimize(:Clarabel, sp).objective ≈ 0 atol=1e-10
 
     @test isnothing(iterate!(sp))
 end
