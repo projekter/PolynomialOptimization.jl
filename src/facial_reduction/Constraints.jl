@@ -374,7 +374,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
         @assert(isone(idxouter))
         if idxinner ≤ length(data.M_obj)
             mons = @inbounds data.M²_obj[idxinner]
-            @inbounds return FacialReductionDataSliceRest{false,C}(data.M_obj[idxinner], data.M⁺_obj[idxinner], mons, k),
+            @inbounds return FacialReductionDataSliceRest{C}(data.M_obj[idxinner], data.M⁺_obj[idxinner], mons, k),
                              (:obj, 1, idxinner +1, k + length(mons))
         end
         k += _sumlen(data.M²_zero)
@@ -386,9 +386,8 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
             grouping = @inbounds data.M_nonneg[idxouter]
             if idxinner ≤ length(grouping)
                 mons = @inbounds data.M²_nonneg[idxouter][idxinner]
-                @inbounds return FacialReductionDataSliceRest{false,C}(grouping[idxinner], data.M⁺_nonneg[idxouter][idxinner],
-                                                                       mons, k),
-                                 (:nonneg, idxouter, idxinner +1, k + length(mons))
+                @inbounds return FacialReductionDataSliceRest{C}(grouping[idxinner], data.M⁺_nonneg[idxouter][idxinner], mons,
+                                                                 k), (:nonneg, idxouter, idxinner +1, k + length(mons))
             else
                 idxouter += 1
                 idxinner = 1
@@ -403,8 +402,7 @@ function Base.iterate(data::FacialReductionData{C}, (pos, idxouter, idxinner, k)
             grouping = @inbounds data.M_psd[idxouter]
             if idxinner ≤ length(grouping)
                 mons = @inbounds data.M²_psd[idxouter][idxinner]
-                @inbounds return FacialReductionDataSliceRest{true,C}(grouping[idxinner], data.M⁺_psd[idxouter][idxinner],
-                                                                      mons, k, size(data.constr_psd[idxouter], 1)),
+                @inbounds return FacialReductionDataSliceRest{C}(grouping[idxinner], data.M⁺_psd[idxouter][idxinner], mons, k),
                                  (:psd, idxouter, idxinner +1, k + length(mons))
             else
                 idxouter += 1
@@ -570,32 +568,22 @@ function Base.iterate(frs::FacialReductionDataSliceFirst{<:IntPolynomial{<:Any,N
     return nothing # to avoid unreachable exceptions
 end
 
-struct FacialReductionDataSliceRest{Matrix,C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0},IN<:Union{Int,Nothing}} <: AbstractFacialReductionDataSlice{IntPolynomial{C,NrPlusNy,0,MV}}
+struct FacialReductionDataSliceRest{C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} <: AbstractFacialReductionDataSlice{IntPolynomial{C,NrPlusNy,0,MV}}
     M::MV
     M⁺::MV
     M²::MV
     k::Int
-    dim::IN
 
-    FacialReductionDataSliceRest{false,C}(M::MV, M⁺::MV, M²::MV, k::Int) where {C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} =
-        new{false,C,NrPlusNy,MV,Nothing}(M, M⁺, M², k, nothing)
-    FacialReductionDataSliceRest{true,C}(M::MV, M⁺::MV, M²::MV, k::Int, dim::Int) where
-        {C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} =
-        new{true,C,NrPlusNy,MV,Int}(M, M⁺, M², k, dim)
+    FacialReductionDataSliceRest{C}(M::MV, M⁺::MV, M²::MV, k::Int) where {C,NrPlusNy,MV<:IntMonomialVector{NrPlusNy,0}} =
+        new{C,NrPlusNy,MV}(M, M⁺, M², k)
 end
 
 Base.length(frs::FacialReductionDataSliceRest) = length(frs.M²)
 
-@generated _cached_minusonepolynomial(::FacialReductionDataSliceRest{<:Any,C}, m::IntMonomial{NrPlusNy,0}) where {C,NrPlusNy} =
+@generated _cached_minusonepolynomial(::FacialReductionDataSliceRest{C}, m::IntMonomial{NrPlusNy,0}) where {C,NrPlusNy} =
     :(@inline; return IntPolynomial($([-one(C)]), IntMonomialVector{NrPlusNy,0}(IntPolynomials.unsafe, m.e, m.index:m.index)))
 
-function Base.iterate(frs::FacialReductionDataSliceRest{false,<:Any}, i::Int=0)
+function Base.iterate(frs::FacialReductionDataSliceRest, i::Int=0)
     i ≥ length(frs.M²) && return nothing
     return (frs.k + i, _cached_minusonepolynomial(frs, @inbounds(frs.M²[i+=1]))), i
-end
-
-function Base.iterate(frs::FacialReductionDataSliceRest{true,<:Any,NrPlusNy}, i::Int=0) where {NrPlusNy}
-    i ≥ length(frs.M²) && return nothing
-    mon = @inbounds frs.M²[i+1]
-    return (frs.k + i, _cached_minusonepolynomial(frs, mon)), i +1
 end
