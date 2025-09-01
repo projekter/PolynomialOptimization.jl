@@ -117,6 +117,15 @@ end
     return 0
 end
 
+function isinterpreted()
+    # These are harmless in the compiled case; and the interpreter will always remove them.
+    # While we could also check whether @inbounds has any effect, this is influenced by the command line parameters.
+    x = Base.@_gc_preserve_begin nothing
+    result = isnothing(x)
+    Base.@_gc_preserve_end x
+    return result
+end
+
 function _truncate(M::IntMonomialVector{Nr,0}, M⁺::IntMonomialVector{Nr,0}, λ::AbstractVector{<:Real},
                    usedλ::AbstractVector{Bool}) where {Nr}
     # The artificial constraint ∑λ = 1 is introduced just to exclude the case where everything is zero. But this means that we
@@ -140,7 +149,7 @@ function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ
     # result. Hence, we disable interrupts during truncation.
     @assert(length(λ) == length(usedλ))
     changed = false
-    Base.sigatomic_begin()
+    isinterpreted() || Base.sigatomic_begin()
     try
         r = 0:0
         @inbounds for (i, (M, M⁺)) in enumerate(zip(data.M_obj, data.M⁺_obj))
@@ -173,7 +182,7 @@ function truncate!(data::FacialReductionData, λ::AbstractVector{<:Real}, usedλ
         end
         @assert(last(r) == length(λ))
     finally
-        Base.sigatomic_end()
+        isinterpreted() || Base.sigatomic_end()
     end
     return changed
 end
