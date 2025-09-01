@@ -104,6 +104,7 @@ end
 
 @inline function λindex(M⁺::IntMonomialVector{Nr,0}, m::IntMonomial{Nr,0}, newExponents::AbstractArray{Int}) where {Nr}
     @assert(length(newExponents) ≥ Nr)
+    iszero(degree(m) & true) || return 0
     for (i, mᵢ) in enumerate(exponents(m))
         iszero(mᵢ & true) || return 0
         newExponents[i] = mᵢ >> 1
